@@ -10,10 +10,12 @@ Definition thisfile := $run (tmCurrentModPath tt).
 
 Print thisfile.
 
-MetaCoq Run (tmQuoteInductive (thisfile, "bool") >>= tmPrint).
+Definition s := $run (tmQuoteInductive (thisfile, "bool")).
+
+(* Print s. *)
 
 (* input: *)
-Definition input := {|
+(* Definition input := {|
   ind_finite := Finite;
                 ind_npars := 0;
                              ind_params := []%list;
@@ -21,8 +23,8 @@ Definition input := {|
           [{|
               ind_name := "bool";
               ind_indices := []%list;
-              ind_sort := sType (Universe.make' Level.lzero);
-              ind_type := tSort (sType (Universe.make' Level.lzero));
+              ind_sort := Universe.of_levels (inr Level.lzero);
+              ind_type := tSort (Universe.of_levels (inr Level.lzero));
               ind_kelim := IntoAny;
               ind_ctors :=
                 [{| cstr_name := "true"; cstr_args := []%list; cstr_indices := []; cstr_type := tRel 0; cstr_arity := 0 |};
@@ -33,7 +35,7 @@ Definition input := {|
           ind_universes := Monomorphic_ctx;
                            ind_variance := None
 |}.
-About input.
+About input. *)
 
 (* output: *)
 (* = tLambda {| binder_name := nNamed "b"; binder_relevance := Relevant |} *)
@@ -81,11 +83,12 @@ Definition GenerateIdentity (i :  mutual_inductive_body) : term :=
              binder_relevance := Relevant  |} (* not important for now, everything always Relevant *)
     todo todo.
 
-About tLambda.
+(* About tLambda.
 Print aname.
 Print binder_annot.
 Print name.
-Print relevance.
+Print ident.
+Print relevance. *)
 
 End firststep.
 
@@ -107,13 +110,9 @@ Module secondstep.
   About tInd.
   Print inductive.
   Print Instance.t.
-  Search Instance.t.
+  (* Search Instance.t. *)
 
 End secondstep.
-
-Inductive list X :=
-| nil
-| cons : X -> list X -> list X.
 
 Module thirdstep.
 
@@ -127,12 +126,12 @@ Module thirdstep.
          {| (* information about the type we do case analysis on *)
            ci_ind := the_inductive ;
            ci_npar := 0;        (* this is going to change once we cover mutual inductive types *)
-           ci_relevance := Relevant 
+           ci_relevance := Relevant
          |}
-         {| 
+         {|
            puinst := []%list;   (* this is going to change once we cover universe levels *)
            pparams := [];       (* this is going to change once we cover types with parameters *)
-           pcontext := [the_name]; 
+           pcontext := [the_name];
            preturn := tInd the_inductive Instance.empty
        |}
          todo todo).
@@ -140,7 +139,7 @@ Module thirdstep.
   About tCase.
   Print inductive.
   Print Instance.t.
-  Search Instance.t.
+  (* Search Instance.t. *)
 
 End thirdstep.
 
@@ -162,12 +161,12 @@ Definition GenerateIdentity (na : kername) (i :  mutual_inductive_body) : term :
        {| (* information about the type we do case analysis on *)
          ci_ind := the_inductive ;
          ci_npar := 0;        (* this is going to change once we cover mutual inductive types *)
-         ci_relevance := Relevant 
+         ci_relevance := Relevant
        |}
-       {| 
+       {|
          puinst := []%list;   (* this is going to change once we cover universe levels *)
          pparams := [];       (* this is going to change once we cover types with parameters *)
-         pcontext := [the_name]; 
+         pcontext := [the_name];
          preturn := tInd the_inductive Instance.empty
        |}
        (tRel 0) (mapi (fun i b =>
@@ -176,9 +175,11 @@ Definition GenerateIdentity (na : kername) (i :  mutual_inductive_body) : term :
                    ) the_constructors)).
 
 Print constructor_body.
+Print mutual_inductive_body.
+Print one_inductive_body.
 Print branch.
 
-Compute GenerateIdentity (MPfile ["identity"]%list, "bool") input.
+(* Compute GenerateIdentity (MPfile ["identity"]%list, "bool") input. *)
 
 Inductive three :=
   zero | one | two.
@@ -187,7 +188,7 @@ MetaCoq Run (tmQuoteInductive (thisfile, "three")).
 
 Definition input2 := ($run (tmQuoteInductive (thisfile, "three"))).
 
-Print input2.
+(* Print input2. *)
 
 Compute $unquote (GenerateIdentity (thisfile, "three") input2).
 
@@ -195,7 +196,7 @@ Inductive nat :=
 | O | S (n : nat).
 
 Definition input3 := ($run (tmQuoteInductive (thisfile, "nat"))).
-Print input3.
+(* Print input3. *)
 
 (* cstr_args := *)
 (*   [{| *)
@@ -212,45 +213,93 @@ Fixpoint id_nat (n : nat) :=
 
 (* bcontext := [{| binder_name := nNamed "m"; binder_relevance := Relevant |}]; *)
 
-Compute $Quote id_nat.
+(* Compute $Quote id_nat. *)
 
-Compute (GenerateIdentity (MPfile ["identity"]%list, "nat") input3).
+(* Compute (GenerateIdentity (MPfile ["identity"]%list, "nat") input3). *)
 
+(* Search list. *)
+
+(* Search rev. *)
 
 Definition GenerateIdentity_recursive (na : kername) (i :  mutual_inductive_body) : term :=
   let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
-  let the_name := {| binder_name := nNamed "x"; (* we just pick a name *)
+  let the_name := {| binder_name := nNamed "y"; (* we just pick a name *)
                     binder_relevance := Relevant  |} (* not important for now, everything always Relevant *) in
   let the_constructors : list constructor_body := match i.(ind_bodies) with
                                                   | b :: _ => b.(ind_ctors)
                                                   | _ => nil
                                                   end in
-  tFix [ {| dname := {| binder_name := nNamed "id" ; binder_relevance := Relevant |} ; 
+
+  let aux : Nat.t -> constructor_body -> branch term := fun i b =>
+    {| bcontext := map (fun c : context_decl => the_name) b.(cstr_args) ;
+       bbody :=
+        match b.(cstr_args) with
+        | [] => tConstruct the_inductive i Instance.empty
+        | args =>
+           tApp
+            (tConstruct the_inductive i Instance.empty)
+            (rev
+              (mapi
+                (fun i _ => tApp (tRel (b.(cstr_arity) + 1)) [(tRel i)])
+                args))
+        end
+    |}
+  in
+
+
+  tFix [ {| dname := {| binder_name := nNamed "id" ; binder_relevance := Relevant |} ;
            dtype := tProd {| binder_name := nAnon ; binder_relevance := Relevant |}
-                      (tInd the_inductive Instance.empty) (tInd the_inductive Instance.empty); 
+                      (tInd the_inductive Instance.empty) (tInd the_inductive Instance.empty);
            dbody :=  tLambda the_name
                        (tInd the_inductive Instance.empty)
                        (tCase
-                          {| 
+                          {|
                             ci_ind := the_inductive ;
-                            ci_npar := 0;       
-                            ci_relevance := Relevant 
+                            ci_npar := 0;
+                            ci_relevance := Relevant
                           |}
-                          {| 
-                            puinst := []%list;   
-                            pparams := [];       
-                            pcontext := [the_name]; 
+                          {|
+                            puinst := []%list;
+                            pparams := [];
+                            pcontext := [the_name];
                             preturn := tInd the_inductive Instance.empty
                           |}
-                          (tRel 0) (mapi (fun i (b : constructor_body) =>
-                                            {| bcontext := map (fun c : context_decl => c.(decl_name)) b.(cstr_args) ;
-                                              bbody := tApp
-                                                         (tConstruct the_inductive i Instance.empty)
-                                                         (mapi (fun i (c : context_decl) => tApp (tRel todo) [(tRel todo)]) b.(cstr_args))
-                                            |}
-                                      ) the_constructors)) ;
+                          (tRel 0) (mapi aux the_constructors)) ;
            rarg := 0 |} ] 0
 .
+
+
+
+(* Compute $Quote id_nat. *)
+
+Compute $unquote (GenerateIdentity (thisfile, "three") input2).
+
+(* Compute (GenerateIdentity_recursive (thisfile, "nat") input3). *)
+
+Compute $unquote (GenerateIdentity_recursive (thisfile, "nat") input3).
+
+
+(* About tLambda.
+About tCase.
+Print tCase.
+Print branch.
+Compute $Quote id_nat.
+Print constructor_body.
+Print input3. *)
+
+Inductive nat':=
+| zero' | S' (n m : nat').
+Definition input4 := ($run (tmQuoteInductive (thisfile, "nat'"))).
+Compute $unquote (GenerateIdentity_recursive (thisfile, "nat'") input4).
+
+(* Print input3. *)
+Print input4.
+
+(* Print length. *)
+
+
+
+(* Print nat. *)
 
 (* TODO list:
    - simple, non-recursive types (bool) DONE
@@ -265,3 +314,147 @@ Definition GenerateIdentity_recursive (na : kername) (i :  mutual_inductive_body
   - re-implement GenerateIdentity with named term representation
   - compare what is easier
  *)
+
+
+(* Inductive mylist (X:Type) : Type :=
+  | mynil : mylist X
+  | mycons (x : X) (l: mylist X) : mylist X. *)
+(* Arguments mynil {X}.
+Arguments mycons {X}. *)
+
+Inductive list' (X:Type) :=
+| nil'
+| cons' : X -> list' X -> list' X.
+(* Arguments nil' {X}.
+Arguments cons' {X}. *)
+
+
+Definition input5 := ($run (tmQuoteInductive (thisfile, "list'"))).
+Print input5.
+(* About List.
+About cons.
+About list.
+Print list. *)
+(* Print Datatypes.list. *)
+(* Print Level.level. *)
+
+Fixpoint id_list (X:Type) (l:list' X): list' X :=
+  match l with
+  | nil' => nil' X
+  | cons' x l1 => cons' X x (id_list _ l1)
+  end.
+Compute $Quote id_list.
+
+
+(* Print mutual_inductive_body.
+Print context.
+Print context_decl.
+Print tSort.
+Print sort.
+Print sType.
+About context_decl. *)
+
+
+(* About input5.
+Print mutual_inductive_body. *)
+
+Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
+
+  let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
+  let the_name := {| binder_name := nNamed "l";
+                    binder_relevance := Relevant  |}
+  in
+  (* single param *)
+  let type_param:=
+    match ty.(ind_params) with
+    | x :: _ =>
+      match x.(decl_type) with
+      | tSort _ => tSort (sType (Universe.make' Level.lzero))
+      | _ => todo
+      end
+    | nil => todo
+    end
+  in
+
+  let aux : Nat.t -> constructor_body -> branch term := fun i b =>
+    {| bcontext := map (fun c : context_decl => the_name) b.(cstr_args) ;
+       bbody :=
+        match b.(cstr_args) with
+        | [] => tApp (tConstruct the_inductive i []) [tRel 1]
+        | args =>
+           let index_param := b.(cstr_arity) + ty.(ind_npars) in
+           tApp
+            (tConstruct the_inductive i Instance.empty)
+            (
+            [tRel index_param]
+            ++
+            (rev
+              (mapi
+                (fun i arg =>
+                  match arg.(decl_type) with
+                  | tRel _ => tRel i
+                  | tApp _ _ =>
+                     (* tApp (tRel 4) [tRel 3; tRel 0] *)
+                      tApp (tRel (index_param+1))
+                        [tRel index_param;tRel i]
+                  | _ => todo
+                  end
+                )
+                args)))
+        end
+    |}
+  in
+
+  let the_constructors : list constructor_body := match ty.(ind_bodies) with
+                                          | b :: _ => b.(ind_ctors)
+                                          | _ => nil
+                                          end in
+
+  tFix [ {| dname := {| binder_name := nNamed "id" ; binder_relevance := Relevant |} ;
+            dtype :=
+              tProd the_name (type_param)
+                (tProd the_name
+                  (tApp
+                    (tInd the_inductive Instance.empty)
+                    [tRel 0])
+                  (tApp
+                    (tInd the_inductive Instance.empty)
+                    [tRel 1])
+                );
+
+            dbody :=
+              tLambda the_name type_param
+                (tLambda the_name (tApp (tInd the_inductive Instance.empty) [tRel 0])
+                  (tCase
+                      {|
+                        ci_ind := the_inductive ;
+                        ci_npar := 1;
+                        ci_relevance := Relevant
+                      |}
+                      {|
+                        puinst := []%list;
+                        pparams := [tRel 1];
+                        pcontext := [the_name];
+                        preturn :=
+                         tApp (tInd the_inductive Instance.empty) [tRel 2]
+                      |}
+                      (tRel 0)
+                      (mapi aux the_constructors)
+                      )) ;
+            rarg := 1 (**???**) |} ] 0
+.
+
+Compute $unquote (GenerateIdentity_param (thisfile, "list'") input5).
+
+
+Inductive list2 X :=
+| mynil
+| mynil3
+| mycons : X -> X -> list2 X -> list2 X -> list2 X
+| mycons2 : X -> list2 X -> X -> list2 X -> list2 X.
+
+Compute $unquote (GenerateIdentity_param (thisfile, "list2")
+  ($run (tmQuoteInductive (thisfile, "list2")))).
+
+
+
