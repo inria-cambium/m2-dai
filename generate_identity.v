@@ -303,6 +303,11 @@ Compute $unquote (GenerateIdentity_recursive (thisfile, "nat'") input4).
    - simple, non-recursive types (bool) DONE
    - simple, recursive types (nat) ALMOST DONE
    - recursive types with parameters (list)
+
+   -- more parameters
+   
+   -- indice 
+
    - mutual inductive types
    - recursive types with indices and parameters (Vector.t)
  *)
@@ -343,6 +348,36 @@ Print list. *)
   end.
  Compute $Quote id_list.  *)
 
+(* Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
+   All2_nil : All2 A B R [] []
+   | All2_cons : forall (x : A) (y : B) (l : list A) (l' : list B),
+                 R x y -> All2 A B R l l' -> All2 A B R (x :: l) (y :: l'). *)
+Inductive All2 (A B : Type) (R : A -> B -> Type) : Type :=
+| All2_nil : All2 A B R
+| All2_cons : forall (x : A) (y : B) (l : list A) (l' : list B),
+              R x y -> All2 A B R -> All2 A B R
+. 
+
+Definition inputa := ($run (tmQuoteInductive (thisfile, "All2"))).
+(* Print inputa. *)
+
+
+(* Fixpoint id_all (A B:Type) (R:A -> B -> Type)  (p: All2 A B R ) :=
+  match p with
+  | All2_nil => All2_nil A B R
+  | All2_cons x y l l' r q => All2_cons A B R x y l l' r (id_all A B R q)
+  end. *)
+
+(* Fixpoint id_all (A B:Type) (R:A -> B -> Type) (l1:list A) (l2:list B) (p: All2 A B R l1 l2) :=
+  match p with
+  | All2_nil => All2_nil A B R
+  | All2_cons x y l l' r q => All2_cons A B R x y l l' r (id_all A B R l l' q)
+  end. *)
+
+
+
+(* Print seq. *)
+
 
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
@@ -361,23 +396,32 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
     | nil => todo
     end
   in *)
-  
+
+  (** [Rel i; tRel i-1; ... ; tRel 0] where i = number of parameters**)
+  let seq_param := 
+    map (fun i => tRel i) 
+      (rev (seq 0 (length (ty.(ind_params))))) 
+  in
+
+  let plus' (k:Datatypes.nat) (tl: list term) :  list term :=
+    map (fun x => match x with tRel i => tRel (i+k) | _ => todo end) tl
+  in
 
   let aux : Nat.t -> constructor_body -> branch term := fun i b =>
     {| bcontext := map (fun _ => the_name (*name not important*)) b.(cstr_args) ;
        bbody :=
         match b.(cstr_args) with
-        | [] => tApp (tConstruct the_inductive i []) [tRel 1]
+        | [] => tApp (tConstruct the_inductive i []) (plus' 1 seq_param)
         | args =>
            let index_param := b.(cstr_arity) + ty.(ind_npars) in
            tApp
             (tConstruct the_inductive i Instance.empty)
-              ([tRel index_param] (** must have this type parameter ? **)
+              (
+              (plus' (1 + b.(cstr_arity)) seq_param)
               ++
               (rev
                 (mapi
                   (fun i arg =>
-
                     match arg.(decl_type) with
                     | tApp (tRel j) tl =>
                         (* check the type *)
@@ -385,8 +429,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                           tApp (tRel (index_param+1))
                             ((map (fix Ffix (t:term) : term :=
                                       match t with
-                                      | tRel _ => tRel index_param
-                                      (* | tRel k => tRel (k+1+i+1) *)
+                                      | tRel k => tRel (k+1+i+1)
                                       | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
                                       | _ => t
                                       end) tl) 
@@ -410,33 +453,38 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 (tProd the_name
                   (tApp
                     (tInd the_inductive Instance.empty)
-                    [tRel 0])
+                    seq_param)
                   (tApp
                     (tInd the_inductive Instance.empty)
-                    [tRel 1])
+                    (plus' 1 seq_param))
                 );
 
             dbody :=
               it_mkLambda_or_LetIn ty.(ind_params)
-                (tLambda the_name (tApp (tInd the_inductive Instance.empty) [tRel 0])
+                (tLambda the_name (tApp (tInd the_inductive Instance.empty) seq_param)
                   (tCase
                     {|
                       ci_ind := the_inductive ;
-                      ci_npar := 1;
+                      ci_npar := length (ty.(ind_params));
                       ci_relevance := Relevant
                     |}
                     {|
                       puinst := []%list;
-                      pparams := [tRel 1];
+                      pparams := plus' 1 seq_param;
                       pcontext := [the_name];
                       preturn :=
-                        tApp (tInd the_inductive Instance.empty) [tRel 2]
+                        tApp (tInd the_inductive Instance.empty) (plus' 2 seq_param)
                     |}
                     (tRel 0)
                     (mapi aux the_constructors)
                   )) ;
-            rarg := length (ty.(ind_params)) (** todo **) |} ] 0
+            rarg := length (ty.(ind_params)) (** by default **) |} ] 0
 .
+
+Compute $unquote (GenerateIdentity_param (thisfile, "All2") inputa).
+
+
+
 
 Compute $unquote (GenerateIdentity_param (thisfile, "list'") input5).
 
@@ -453,7 +501,6 @@ Inductive list2 (X:Type) :=
 Inductive list3 (A:Set) : Set :=
 | nil3 : list3 A
 | cons3 : A -> list3 (A*A*A) -> list3 A.
-
 
 
 Inductive Fin (n:nat) : Set :=
