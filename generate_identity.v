@@ -344,18 +344,6 @@ Print list. *)
  Compute $Quote id_list.  *)
 
 
-(* Print mutual_inductive_body.
-Print context.
-Print context_decl.
-Print tSort.
-Print sort.
-Print sType.
-About context_decl. *)
-
-
-(* About input5.
-Print mutual_inductive_body. *)
-
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
   let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
@@ -363,17 +351,16 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     binder_relevance := Relevant  |}
   in
   (* single param *)
-  let type_param:=
+(*   let type_param:=
     match ty.(ind_params) with
     | x :: _ =>
       match x.(decl_type) with
-      | tSort _ => tSort (sType (Universe.make' Level.lzero)) (** todo **)
+      | tSort s => tSort s (** todo **)
       | _ => todo
       end
     | nil => todo
     end
-  in
-
+  in *)
   
 
   let aux : Nat.t -> constructor_body -> branch term := fun i b =>
@@ -398,7 +385,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                           tApp (tRel (index_param+1))
                             ((map (fix Ffix (t:term) : term :=
                                       match t with
-                                      | tRel k => tRel (k+1+i+1)
+                                      | tRel _ => tRel index_param
+                                      (* | tRel k => tRel (k+1+i+1) *)
                                       | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
                                       | _ => t
                                       end) tl) 
@@ -418,7 +406,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 
   tFix [ {| dname := {| binder_name := nNamed "id" ; binder_relevance := Relevant |} ;
             dtype :=
-              tProd the_name (type_param)
+              it_mkProd_or_LetIn ty.(ind_params)
                 (tProd the_name
                   (tApp
                     (tInd the_inductive Instance.empty)
@@ -429,7 +417,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 );
 
             dbody :=
-              tLambda the_name type_param
+              it_mkLambda_or_LetIn ty.(ind_params)
                 (tLambda the_name (tApp (tInd the_inductive Instance.empty) [tRel 0])
                   (tCase
                     {|
@@ -447,7 +435,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     (tRel 0)
                     (mapi aux the_constructors)
                   )) ;
-            rarg := 1 (**???**) |} ] 0
+            rarg := length (ty.(ind_params)) (** todo **) |} ] 0
 .
 
 Compute $unquote (GenerateIdentity_param (thisfile, "list'") input5).
@@ -465,14 +453,23 @@ Inductive list2 (X:Type) :=
 Inductive list3 (A:Set) : Set :=
 | nil3 : list3 A
 | cons3 : A -> list3 (A*A*A) -> list3 A.
+
+
+
+Inductive Fin (n:nat) : Set :=
+| fzero: Fin n
+| fS: Fin n -> Fin n.
+Definition inputf := ($run (tmQuoteInductive (thisfile, "Fin"))).
+Compute $unquote (GenerateIdentity_param (thisfile, "Fin") inputf).
+
+
+
+
 (* 
 Inductive even : nat -> Set :=
 | even0 : even O
 | evenSS : forall n, even n -> even (S (S n)).
 
-(* Inductive Fin (n:nat) : Set =
-| fzero: Fin n
-| fS: Fin n -> Fin  *)
 
 Fixpoint id_even (n: nat) (p : even n) : even n :=
   match p with
