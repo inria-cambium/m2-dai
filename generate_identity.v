@@ -249,6 +249,7 @@ Definition GenerateIdentity_recursive (na : kername) (i :  mutual_inductive_body
                       if eqb j (b.(cstr_arity)-1-i) then    
                          tApp (tRel (b.(cstr_arity) + 1)) [(tRel i)]
                       else tRel i
+                  
                   | _ => tRel i end )
                 args))
         end
@@ -301,12 +302,13 @@ Compute $unquote (GenerateIdentity_recursive (thisfile, "nat'") input4).
 
 (* TODO list:
    - simple, non-recursive types (bool) DONE
-   - simple, recursive types (nat) ALMOST DONE
-   - recursive types with parameters (list)
-
-   -- more parameters
+   - simple, recursive types (nat) DONE
+   - recursive types with parameters (list) DONE
+   - multiple parameters 
    
+   -- 
    -- indice 
+   -- combine the generator of type with/without parameter
 
    - mutual inductive types
    - recursive types with indices and parameters (Vector.t)
@@ -378,6 +380,10 @@ Definition inputa := ($run (tmQuoteInductive (thisfile, "All2"))).
 
 (* Print seq. *)
 
+Print eqb.
+
+Search (Datatypes.nat -> Datatypes.nat -> Datatypes.bool).
+
 
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
@@ -410,12 +416,16 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
   let aux : Nat.t -> constructor_body -> branch term := fun i b =>
     {| bcontext := map (fun _ => the_name (*name not important*)) b.(cstr_args) ;
        bbody :=
+        let narg := length b.(cstr_args) in
         match b.(cstr_args) with
         | [] => tApp (tConstruct the_inductive i []) (plus' 1 seq_param)
         | args =>
            let index_param := b.(cstr_arity) + ty.(ind_npars) in
            tApp
             (tConstruct the_inductive i Instance.empty)
+              (* Now, this function works only for inductive type with parameter. 
+                 For inductive type without parameter, use the previous generator
+              *)
               (
               (plus' (1 + b.(cstr_arity)) seq_param)
               ++
@@ -429,14 +439,19 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                           tApp (tRel (index_param+1))
                             ((map (fix Ffix (t:term) : term :=
                                       match t with
-                                      | tRel k => tRel (k+1+i+1)
+                                      | tRel k =>
+                                        (** different cases: See list3, mterm **)
+                                        if leb (narg-i-1) k then tRel (k+1+i+1) else tRel (k+i+1)
                                       | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                      (* | tLambda name t1 t2 => tLambda name (Ffix t1) (Ffix t2) *)
                                       | _ => t
-                                      end) tl) 
+                                      end) tl)
                               ++ [tRel i])
                         else tRel i
                     | _ => tRel i
                     end)
+               
+
                   args)))
         end
     |}
@@ -484,7 +499,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 Compute $unquote (GenerateIdentity_param (thisfile, "All2") inputa).
 
 
-
+Print input5.
 
 Compute $unquote (GenerateIdentity_param (thisfile, "list'") input5).
 
@@ -542,10 +557,21 @@ Compute $unquote (GenerateIdentity_param (thisfile, "list3") input7).
 
 
 
+Inductive mterm (n:nat): Type :=
+| mVar
+| mApp (a b:nat) (x: mterm a) (y:mterm b).
+Definition input' := ($run (tmQuoteInductive (thisfile, "mterm"))).
+Compute $unquote (GenerateIdentity_param (thisfile, "mterm") input').
 
+(* 
+Compute $unquote (GenerateIdentity_param (thisfile, "nat") input3).
+(*does not work*)
+ *)
 
+ Inductive term2 : Type :=
+ | Var2 (n:nat)
+ | Lam (f:nat -> term2).
 
-
-
-
-
+ Definition input_term2 := ($run (tmQuoteInductive (thisfile, "term2"))).
+ Compute $unquote (GenerateIdentity_recursive (thisfile, "term2") input_term2).
+ 
