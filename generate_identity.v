@@ -386,14 +386,16 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                         (* check the type *)
                         if eqb j (index_param-1-i) then
                           tApp (tRel (index_param + (length indices) + 1))
-                            ((map (fix Ffix (t:term) : term :=
-                                      match t with
-                                      | tRel k =>
-                                        if leb (narg-i-1) k then tRel (k+1+i+1+length indices) else tRel (k+i+1)
-                                      | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
-                                      (* | tLambda name t1 t2 => tLambda name (Ffix t1) (Ffix t2) *)
-                                      | _ => t
-                                      end) tl)
+                            ((map 
+                              (fix Ffix (t:term) : term :=
+                                match t with
+                                | tRel k =>
+                                  if leb (narg-i-1) k then 
+                                    tRel (k+1+i+1+length indices) 
+                                  else tRel (k+i+1)
+                                | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                | _ => t
+                                end) tl)
                               ++ [tRel i])
                         else tRel i
                     | _ => tRel i end)
@@ -427,8 +429,9 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                       puinst := []%list;
                       pparams := plus' 1 seq_param; 
                       pcontext := listmake _ the_name (1 + (length indices)); 
-                      preturn := (*todo !!! *)
-                        tApp (tInd the_inductive Instance.empty) ((plus' (1 + 1 + length indices) seq_param) ++ (plus' 1 seq_indice))
+                      preturn :=
+                        tApp (tInd the_inductive Instance.empty) 
+                          ((plus' (1 + 1 + length indices) seq_param) ++ (plus' 1 seq_indice))
                     |}
                     (tRel 0)
                     (mapi aux the_constructors)
@@ -516,3 +519,129 @@ Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
                  R x y -> All2 A B R l l' -> All2 A B R (x :: l) (y :: l').
 Definition input_all2 := ($run (tmQuoteInductive (thisfile, "All2"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "All2") input_all2).
+
+
+
+(*mutual inductive type*)
+Definition GenerateIdentity_mutual (na : kername) (ty :  mutual_inductive_body) : term :=
+
+  let n_inductives := length ty.(ind_bodies) in
+  let the_name := {| binder_name := nNamed "x";
+                    binder_relevance := Relevant  |}
+  in
+
+  let plus' (k:Datatypes.nat) (tl: list term) :  list term :=
+    map (fun x => match x with tRel i => tRel (i+k) | _ => todo end) tl
+  in
+
+  let params := ty.(ind_params) in
+
+  let myf (i:Datatypes.nat) (body: one_inductive_body) :=
+
+    let the_inductive := {| inductive_mind := na; inductive_ind := i |} in
+
+    let indices :=  body.(ind_indices) in
+    let seq_indice := 
+      map (fun i => tRel i) (rev (seq 0 (length indices))) 
+    in
+    let seq_param :=
+      plus' (length indices)
+        (map (fun i => tRel i) (rev (seq 0 (length params))))
+    in
+    let seq_indice_param := seq_param ++ seq_indice in
+    let aux : Nat.t -> constructor_body -> branch term := fun i b =>
+      {| bcontext := map (fun _ => the_name (*name not important*)) b.(cstr_args) ;
+        bbody :=
+          let narg := length b.(cstr_args) in
+          let index_param := b.(cstr_arity) + ty.(ind_npars) in
+          tApp
+            (tConstruct the_inductive i Instance.empty)
+              ((plus' (1 + b.(cstr_arity)) seq_param)
+                ++
+              (rev
+                (mapi
+                  (fun i arg =>
+                    match arg.(decl_type) with
+                    | tApp (tRel j) tl =>
+                        if andb (leb (index_param-1-i) j)  (leb j (index_param -i-1 + n_inductives -1 )) then
+                          tApp (tRel (2 + j + i + length indices))
+                            ((map 
+                              (fix Ffix (t:term) : term :=
+                                match t with
+                                | tRel k =>
+                                  if leb (narg-i-1) k then 
+                                    tRel (k+1+i+1+length indices) 
+                                  else tRel (k+i+1)
+                                | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                | _ => t
+                                end) tl)
+                              ++ [tRel i])
+                        else tRel i
+                    | _ => tRel i end)
+                  b.(cstr_args))))
+      |}
+    in
+
+    {|
+      dname := {| binder_name := nNamed "id" ; 
+                  binder_relevance := Relevant |};
+      dtype :=  
+        it_mkProd_or_LetIn (indices ++ params)
+          (tProd the_name
+            (tApp
+              (tInd the_inductive Instance.empty)
+              seq_indice_param)
+            (tApp
+              (tInd the_inductive Instance.empty)
+              (plus' 1 seq_indice_param))
+          );
+
+      dbody :=
+        it_mkLambda_or_LetIn (indices ++ params)
+        (tLambda the_name (tApp (tInd the_inductive Instance.empty) seq_indice_param)
+          (tCase
+            {|
+              ci_ind := the_inductive ;
+              ci_npar := length params;
+              ci_relevance := Relevant
+            |}
+            {|
+              puinst := []%list;
+              pparams := plus' 1 seq_param; 
+              pcontext := listmake _ the_name (1 + (length indices)); 
+              preturn :=
+                tApp (tInd the_inductive Instance.empty) 
+                  ((plus' (1 + 1 + length indices) seq_param) ++ (plus' 1 seq_indice))
+            |}
+            (tRel 0)
+            (mapi aux body.(ind_ctors))
+          ));
+      rarg := length indices + length params
+    |}
+  in
+  tFix (mapi myf ty.(ind_bodies)) 0
+.
+
+
+Inductive ntree (A:Set) : Set :=
+  nnode : A -> nforest A -> ntree A
+with nforest (A:Set) : Set :=
+  | nnil: nforest A
+  | ncons (a:ntree A) (b:nforest A): nforest A
+.
+(* Parameters should be syntactically the same for each inductive type. *)
+
+Definition inputtree := ($run (tmQuoteInductive (thisfile, "ntree"))).
+Compute $unquote (GenerateIdentity_mutual (thisfile, "ntree") inputtree).
+
+
+Inductive ntree2 (A:Set) : Set :=
+  nnode2 : A -> nforest2 A -> ntree2 A
+with nforest2 (A:Set) : Set :=
+  | nnil2: nforest2 A
+  | ncons2 (a:ntree2 A) (b:nforest2 A): nforest2 A
+with smt2 (A:Set) :Set := | H (a:ntree2 A) | K (a:nforest2 A)
+.
+Definition inputtree2 := ($run (tmQuoteInductive (thisfile, "ntree2"))).
+Compute $unquote (GenerateIdentity_mutual (thisfile, "ntree2") inputtree2).
+
