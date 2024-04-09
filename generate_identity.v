@@ -376,9 +376,11 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     let Ffix t :=
                       match t with
                       | tRel j => 
-                          if eqb (j) (b.(cstr_arity)-1-i) then    
-                            tApp (tRel (b.(cstr_arity) + 1)) [tRel i]
-                          else tRel (i)
+                        if andb (leb (b.(cstr_arity)-1-i) j)
+                            (leb j (b.(cstr_arity)-1-i + n_inductives -1))
+                        then    
+                          tApp (tRel (j + 1 + i + 1)) [tRel i]
+                        else tRel (i)
                       (* todo *)
                       | _ => tRel (i) end 
                     in Ffix arg.(decl_type))
@@ -395,23 +397,23 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                       match arg.(decl_type) with
                       (*for type with indice/parameter*)
                       | tApp (tRel j) tl =>
-                          if andb (leb (index_param-1-i) j) 
-                                (leb j (index_param-1-i + n_inductives -1 )) 
-                          then
-                            tApp (tRel (2 + j + i + length indices))
-                              ((map 
-                                (fix Ffix (t:term) : term :=
-                                  match t with
-                                  | tRel k =>
-                                    if leb (narg-i-1) k then 
-                                      tRel (k+1+i+1+length indices) 
-                                    else tRel (k+i+1)
-                                  | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
-                                  (*todo*)
-                                  | _ => t
-                                  end) tl)
-                                ++ [tRel i])
-                          else tRel i
+                        if andb (leb (index_param-1-i) j) 
+                              (leb j (index_param-1-i + n_inductives -1 )) 
+                        then
+                          tApp (tRel (2 + j + i + length indices))
+                            ((map 
+                              (fix Ffix (t:term) : term :=
+                                match t with
+                                | tRel k =>
+                                  if leb (narg-i-1) k then 
+                                    tRel (k+1+i+1+length indices) 
+                                  else tRel (k+i+1)
+                                | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                (*todo*)
+                                | _ => t
+                                end) tl)
+                              ++ [tRel i])
+                        else tRel i
                         (*todo*)
                       | _ => tRel i end)
                     b.(cstr_args))))
@@ -573,4 +575,21 @@ with nforest2 (A:Set) : Set :=
 .
 Definition inputtree2 := ($run (tmQuoteInductive (thisfile, "ntree2"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "ntree2") inputtree2).
+
+
+Inductive Point : Type :=
+  | Pt : Config -> Config -> Point
+with Line : Type :=
+  | Ln : Point -> Point -> Line
+  | Ext : Line -> Line
+with Circle : Type :=
+  | Crc : Point -> Line -> Circle
+with Figure : Type :=
+  | P : Point -> Figure
+  | L : Line -> Figure
+  | C : Circle -> Figure
+with Config : Type :=
+  | Conf : list Figure -> Config.
+Definition inputpoint := ($run (tmQuoteInductive (thisfile, "Point"))).
+Compute $unquote (GenerateIdentity_param (thisfile, "Point") inputpoint).
   
