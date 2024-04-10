@@ -232,6 +232,29 @@ Definition GenerateIdentity_recursive (na : kername) (i :  mutual_inductive_body
                                                   | _ => nil
                                                   end in
 
+  (*for inductive type A *)
+  (*check the type of an arg is of form: _ -> _-> _-> A*)
+  let fix check_type (t:term) (n:Nat.t): bool :=
+    match t with
+    | tProd _ _ t => check_type t (n+1)
+    | tRel i => if eqb i n then true else false
+    | _ => false
+    end in
+  
+  let fix lift (t:term) :term :=
+    match t with
+    | tRel i => tRel (i+1)
+    | tApp t1 tl => tApp (lift t1) (map lift tl)
+    | _ => todo
+    end in
+
+  let fix transformer (t:term) (u:term) (n:Nat.t):=
+    match t with
+    | tProd _ t1 t2 => tLambda the_name t1 (transformer t2 (tApp (lift u) [tRel 0]) n)
+    | tRel i => tApp (tRel (i+n)) [u] (*plus 2*) 
+    | _ => todo 
+    end in                                                         
+
   let aux : Nat.t -> constructor_body -> branch term := fun i b =>
     {| bcontext := map (fun c : context_decl => the_name) b.(cstr_args) ;
        bbody :=
@@ -249,6 +272,10 @@ Definition GenerateIdentity_recursive (na : kername) (i :  mutual_inductive_body
                         if eqb (j) (b.(cstr_arity)-1-i) then    
                           tApp (tRel (b.(cstr_arity) + 1)) [(tRel (i))]
                         else tRel (i)
+                    | tProd _ t1 t2 =>
+                        let index := b.(cstr_arity)-1-i+1 in
+                        if (check_type t2 index) then transformer t (tRel i) (2+i)
+                        else tRel i
                     (* todo *)
                     | _ => tRel (i) end 
                   in Ffix arg.(decl_type))
@@ -293,15 +320,21 @@ Definition input4 := ($run (tmQuoteInductive (thisfile, "nat'"))).
 (* Print input4. *)
 Compute $unquote (GenerateIdentity_recursive (thisfile, "nat'") input4).
 
-(* 
-(*todo*)
+
+
 Inductive term2 : Type :=
 | Var2 (n:nat)
-| Lam (f:nat -> term2).
-
+| App (t1 t2:term2)
+| Lam (f: nat -> nat-> term2)
+| Lam2 (f1: nat -> term2) (f2:nat -> term2)
+.
 Definition input_term2 := ($run (tmQuoteInductive (thisfile, "term2"))).
-Print input_term2.
-Compute $unquote (GenerateIdentity_recursive (thisfile, "term2") input_term2). *)
+Compute $unquote (GenerateIdentity_recursive (thisfile, "term2") input_term2).
+
+(* 
+(*todo*)
+
+
 
 
 
@@ -310,12 +343,6 @@ Compute $unquote (GenerateIdentity_recursive (thisfile, "term2") input_term2). *
    - simple, non-recursive types (bool) DONE
    - simple, recursive types (nat) DONE
    - recursive types with parameters (list) DONE
-   - multiple parameters 
-   
-   -- 
-   -- indice 
-   -- combine the generator of type with/without parameter
-
    - mutual inductive types
    - recursive types with indices and parameters (Vector.t)
  *)
