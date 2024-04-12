@@ -375,8 +375,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         let fix check_type (t:term) (n1 n2:Nat.t): bool :=
           match t with
           | tProd _ _ t => check_type t (n1+1) (n2+1)
-          | tRel i => if andb (leb n1 i) (leb i n2) then true else false
-          | tApp (tRel i) _ => if andb (leb n1 i) (leb i n2) then true else false
+          | tRel i => if (leb n1 i) && (leb i n2) then true else false
+          | tApp (tRel i) _ => if (leb n1 i) &&  (leb i n2) then true else false
           | _ => false
           end in
         let fix transformer (t:term) (u:term) (n depth:Nat.t):=
@@ -387,18 +387,34 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
             | _ => todo
             end
           in
+          let fix smt k j t :=
+            match t with
+            | tRel i => if ltb i k then tRel i
+                        else
+                        (* if leb i (depth + 1 + length indices)
+                             then  *)
+                             tRel (i + j)
+                             (* else tRel (i + narg + 1 + length indices) *)
+            | tApp t tl => tApp (smt k j t) (map (smt k j) tl)
+            | tLambda name t1 t2 => tLambda name (smt k j t1) (smt (k+1) j t2)
+            | _ => t
+            end
+          in
           match t with
-          | tProd _ t1 t2 => tLambda the_name t1 (transformer t2 (tApp (lift u) [tRel 0]) n (depth+1))
-          | tApp (tRel i) tl =>
-              tApp (tRel (i+n+2+length indices))
+          | tProd _ t1 t2 => tLambda the_name (smt (narg-n+depth-1) (2 + n + length indices) t1) (transformer t2 (tApp (lift u) [tRel 0]) n (depth+1))
+          | tApp (tRel j) tl =>
+              tApp (tRel (j+n+2+length indices))
                 (((map
                       (fix Ffix (t:term) : term :=
                         match t with
                         | tRel k =>
-                          if leb (narg-i-1+ depth+1) k then
+                          if leb (narg-n+depth-1) k then
                             tRel (k+n+2+length indices)
                           else
-                            tRel (k+n+1)
+                            if leb depth k then
+                              tRel (k+n+1)
+                          else
+                            tRel k
                         | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
                         | _ => t
                         end) tl))
@@ -457,7 +473,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                       (*check if the type of the argument is exactly the type
                         (or defined by another inductive body)
                         we are defining. *) (* vec _ _ *)
-                        if andb (leb (index_param-1-i) j)
+                        if  (leb (index_param-1-i) j) &&
                               (leb j (index_param-1-i + n_inductives -1 ))
                         then
                           tApp
@@ -484,7 +500,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                       (*check if the type of the argument is exactly the type
                         (or defined by another inductive body)
                         we are defining *)
-                        if andb (leb (index_param-1-i) j)
+                        if (leb (index_param-1-i) j) &&
                             (leb j (index_param-1-i + n_inductives -1))
                         then
                           tApp (tRel (2 + j + i + length indices)) [tRel i]
@@ -542,14 +558,21 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 .
 
 
+
+Inductive Acc (A : Type) (R : A -> A -> Type) (x : A) : Type :=
+	Acc_intro  :(forall y : A, R y x -> Acc A R y) -> Acc A R x.
+Definition inputacc := ($run (tmQuoteInductive (thisfile, "Acc"))).
+Compute $unquote (GenerateIdentity_param (thisfile, "Acc") inputacc).
+
+
 (*type constructor with lambda argument*)
 Inductive vec' (X:Type) : nat -> Type:=
   | vnil' : vec' X O
   | vcons' : X -> forall n:nat, (nat -> vec' X n) -> nat -> vec' X (S n)
-  | vcons2' : X -> forall n:nat, (nat -> vec' X n) -> vec' X (S n)
-  | vcons3' : forall n:nat, (nat -> nat -> vec' X n) -> vec' X (S n)
   .
 Definition input_vec' := ($run (tmQuoteInductive (thisfile, "vec'"))).
+(* Print input_vec'. *)
+
 Compute $unquote (GenerateIdentity_param (thisfile, "vec'") input_vec').
 
 
@@ -711,3 +734,6 @@ with Config : Type :=
 .
 Definition inputpoint := ($run (tmQuoteInductive (thisfile, "Point"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "Point") inputpoint). *)
+
+
+
