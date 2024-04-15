@@ -339,6 +339,11 @@ Fixpoint listmake (X:Type) (x:X) (n:Datatypes.nat) :=
 
 
 
+
+
+
+
+
 Record extrainfo:Set := mkinfo
   {
     id_index0: nat;
@@ -346,38 +351,39 @@ Record extrainfo:Set := mkinfo
 
     index_param: nat;
     index_arg: nat;
-    map0: nat -> nat;
-    map1: nat -> nat;
-    map2: nat -> nat
+
+    offset_param : nat;
+    offset_arg : nat
   }.
 
 Definition geti (extrainfo:extrainfo) (i:nat) :=
-  if leb extrainfo.(index_param) i then extrainfo.(map0) i
-  else if leb extrainfo.(index_arg) i then extrainfo.(map1) i
-  else extrainfo.(map2) i.
+  if leb extrainfo.(index_param) i then extrainfo.(offset_param) + i
+  else if leb extrainfo.(index_arg) i then extrainfo.(offset_arg)  + i
+  else i.
 
 Definition is_recursive_call (extrainfo:extrainfo) (i:nat) :=
   leb extrainfo.(id_index0) i && leb i extrainfo.(id_index1).
 
-Definition update1 (extrainfo:extrainfo) :=
-  mkinfo (extrainfo.(id_index0) + 1)
-    (extrainfo.(id_index1) + 1)
-    (extrainfo.(index_param)+1)
-    (extrainfo.(index_arg)+1)
-    ( fun i => 1 + (extrainfo.(map0) i))
-    ( fun i => 1 + (extrainfo.(map1) i))
-    ( fun i => 1 + (extrainfo.(map2) i))
-    .
+
 Definition update2 (extrainfo:extrainfo) :=
   mkinfo (extrainfo.(id_index0) - 1)
     (extrainfo.(id_index1) - 1)
     (extrainfo.(index_param) - 1)
     (extrainfo.(index_arg))
-    ( fun i => (extrainfo.(map0) i) + 1 )
-    ( fun i => (extrainfo.(map1) i) + 1 )
-    ( fun i => (extrainfo.(map2) i) )
+    (extrainfo.(offset_param) + 1 )
+    (extrainfo.(offset_arg) + 1 )
     .
-Definition getmap0 extrainfo i := extrainfo.(map0) i.
+
+
+Definition update3 (extrainfo:extrainfo) :=
+  mkinfo (extrainfo.(id_index0) + 1)
+    (extrainfo.(id_index1) + 1)
+    (extrainfo.(index_param) + 1)
+    (extrainfo.(index_arg) + 1 )
+    (extrainfo.(offset_param) )
+    (extrainfo.(offset_arg) )
+    .
+
 
 
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
@@ -413,72 +419,14 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
           let narg := b.(cstr_arity) in
           let index_param := b.(cstr_arity) + ty.(ind_npars) in
 
+          (*extra info at the position of the last argument*)
           let extrainfo := mkinfo
             (index_param-1+0) (index_param-1+n_inductives-1+0)
             (narg-1+0) (0)
-            (fun j => j + 1 - 0 + 1 + length indices )
-            (fun j => j + 1 - 0 )
-            (fun j => j )
+            (1 - 0 + 1 + length indices )
+            (1 - 0 )
           in
-          (* let extrainfo := mkinfo
-                        (index_param-1-i) (index_param-1+n_inductives-1-i)
-                        ( narg-1-i) (0)
-                        (fun j => j + 1 + i + 1 + length indices )
-                        (fun j => j + 1 + i )
-                        (fun j => j)
-                      in *)
 
-
-        (* let fix check_type (t:term) (n1 n2:Nat.t): bool :=
-          match t with
-          | tProd _ _ t => check_type t (n1+1) (n2+1)
-          | tRel i => if (leb n1 i) && (leb i n2) then true else false
-          | tApp (tRel i) _ => if (leb n1 i) &&  (leb i n2) then true else false
-          | _ => false
-          end in
-        let fix transformer (t:term) (u:term) (n depth:Nat.t):=
-          let fix lift (t:term) :term :=
-            match t with
-            | tRel i => tRel (i+1)
-            | tApp t tl => tApp (lift t) (map lift tl)
-            | _ => todo
-            end
-          in
-          let fix smt k j t :=
-            match t with
-            | tRel i => if ltb i k then tRel i
-                        else
-                        (* if leb i (depth + 1 + length indices)
-                             then  *)
-                             tRel (i + j)
-                             (* else tRel (i + narg + 1 + length indices) *)
-            | tApp t tl => tApp (smt k j t) (map (smt k j) tl)
-            | tLambda name t1 t2 => tLambda name (smt k j t1) (smt (k+1) j t2)
-            | _ => t
-            end
-          in
-          match t with
-          | tProd _ t1 t2 => tLambda the_name (smt (narg-n+depth-1) (2 + n + length indices) t1) (transformer t2 (tApp (lift u) [tRel 0]) n (depth+1))
-          | tApp (tRel j) tl =>
-              tApp (tRel (j+n+2+length indices))
-                (((map
-                      (fix Ffix (t:term) : term :=
-                        match t with
-                        | tRel k =>
-                          if leb (narg-n+depth-1) k then
-                            tRel (k+n+2+length indices)
-                          else
-                            if leb depth k then
-                              tRel (k+n+1)
-                          else
-                            tRel k
-                        | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
-                        | _ => t
-                        end) tl))
-                ++ [u])
-          | tRel i => tApp (tRel (i+n+2)) [u]
-          | _ => todo
-          end in *)
 
           (*Take Vector.t for example,
               Inductive vec (X:Type) : nat -> Set :=
@@ -501,8 +449,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 (*the type parameters*) (*X*)
                 ((plus' (1 + b.(cstr_arity)) seq_param)
                   ++
-                (rev
-                  (let fix auxarg extrainfo i args :=
+                 (rev
+                   (let fix auxarg extrainfo i args :=
                       match args with
                       | arg :: args =>
                         (match arg.(decl_type) with
@@ -512,7 +460,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                             then
                               tApp
                                 (*recursive call of the identity function*) (*id_vec*)
-                                (tRel (getmap0 extrainfo j))
+                                (tRel (geti extrainfo j))
                                 (*the parameter/indice of the identity function*) (*X n*)
                                 ((map
                                   (fix Ffix (t:term) : term :=
@@ -528,75 +476,63 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                           | tRel j =>
                             if is_recursive_call extrainfo j
                             then
-                              tApp (tRel (getmap0 extrainfo j)) [tRel i]
+                              tApp (tRel (geti extrainfo j)) [tRel i]
                             else tRel i
                           (*constructor with lambda type argument*)
-                          (* | tProd _ t1 t2 =>
-                            let index := index_param-i in
-                            if (check_type t2 index (index+n_inductives-1))
+                          | tProd _ t1 t2 =>
+                            (***********)
+                            (*for lambda type argument*)
+                            let fix check_type (t:term) (n1 n2:Nat.t): Datatypes.bool :=
+                              match t with
+                              | tProd _ _ t => check_type t (n1+1) (n2+1)
+                              | tRel i => (leb n1 i) && (leb i n2)
+                              | tApp (tRel i) _ => (leb n1 i) &&  (leb i n2)
+                              | _ => Datatypes.false
+                              end in
+                            let fix transformer (t:term) (u:term) extrainfo:=
+                              let fix lift (t:term) :term :=
+                                match t with
+                                | tRel i => tRel (i+1)
+                                | tApp t tl => tApp (lift t) (map lift tl)
+                                | _ => todo
+                                end
+                              in
+                              let fix smt extrainfo t:=
+                                match t with
+                                | tRel i => tRel (geti extrainfo i)
+                                | tApp t tl => tApp (smt extrainfo t) (map (smt extrainfo) tl)
+                                | tLambda name t1 t2 => tLambda name (smt extrainfo t1) (smt (update3 extrainfo) t2)
+                                | _ => t
+                                end
+                              in
+                              match t with
+                              | tProd _ t1 t2 =>
+                                tLambda the_name (smt extrainfo t1)
+                                  (transformer t2 (tApp (lift u) [tRel 0]) (update3 extrainfo))
+                              | tApp (tRel j) tl =>
+                                  tApp (tRel (geti extrainfo j))
+                                    (((map
+                                          (fix Ffix (t:term) : term :=
+                                            match t with
+                                            | tRel k => tRel (geti extrainfo k)
+                                            | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                            | _ => t
+                                            end) tl))
+                                    ++ [u])
+                              | tRel i => tApp (tRel (geti extrainfo i)) [u] (*called only when check_type is true*)
+                              | _ => todo
+                              end in
+                            (***********)
+                            if (check_type t2 (1+extrainfo.(id_index0)) (1+extrainfo.(id_index1)))
                             then
-                              transformer arg.(decl_type) (tRel i) i 0
-                            else tRel i *)
-                          | _ => tRel i
-                          end) ::
-                        auxarg (update2 extrainfo) (i+1) args
+                              transformer arg.(decl_type) (tRel i) extrainfo
+                            else tRel i
+                          | _ => tRel i end) :: auxarg (update2 extrainfo) (i+1) args
                       | _ => [] end
                     in
-                    auxarg extrainfo 0 b.(cstr_args)
+                    auxarg extrainfo 0 b.(cstr_args))
                   )
-
-                  (* (mapi
-                    (
-                    fun i arg =>
-                      (* let extrainfo := mkinfo
-                        (index_param-1-i) (index_param-1+n_inductives-1-i)
-                        ( narg-1-i) (0)
-                        (fun j => j + 1 + i + 1 + length indices )
-                        (fun j => j + 1 + i )
-                        (fun j => j)
-                      in *)
-
-                      let extrainfo := update2 extrainfo in
-                    match arg.(decl_type) with
-                      (*type with indice/parameter*)
-                      | tApp (tRel j) tl =>
-                        if  is_recursive_call extrainfo j
-                        then
-                          tApp
-                            (*recursive call of the identity function*) (*id_vec*)
-                            (tRel (2 + j + i + length indices))
-                            (*the parameter/indice of the identity function*) (*X n*)
-                            ((map
-                              (fix Ffix (t:term) : term :=
-                                match t with
-                                | tRel k => tRel (geti extrainfo k)
-                                | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
-                                | _ => t (* todo *)
-                                end) tl)
-                                (*the last argument*) (*v*)
-                              ++ [tRel i])
-                        else tRel i
-                      (*type without indice/parameter*)
-                      | tRel j =>
-                        if is_recursive_call extrainfo j
-                        then
-                          tApp (tRel (2 + j + i + length indices)) [tRel i]
-                        else tRel i
-
-
-                      (*constructor with lambda type argument*)
-                      (* | tProd _ t1 t2 =>
-                        let index := index_param-i in
-                        if (check_type t2 index (index+n_inductives-1))
-                        then
-                          transformer arg.(decl_type) (tRel i) i 0
-                        else tRel i *)
-                      | _ => tRel i end)
-
-
-                    b.(cstr_args)) *)
-
-                    ))
+                )
       |}
     in
 
@@ -652,11 +588,6 @@ Compute $unquote (GenerateIdentity_param (thisfile, "vec") input_vec).
 
 
 
-
-
-
-
-
 (*mutual inductive type*)
 Inductive ntree (A:Set) : Set :=
   nnode : A -> nforest A -> ntree A
@@ -679,34 +610,19 @@ Definition inputtree2 := ($run (tmQuoteInductive (thisfile, "ntree2"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "ntree2") inputtree2).
 
 
-
-
-
-
-
-
-
-
-
-
-
-(* 
-
-
+(*type constructor with lambda argument*)
 Inductive Acc (A : Type) (R : A -> A -> Type) (x : A) : Type :=
 	Acc_intro  :(forall y : A, R y x -> Acc A R y) -> Acc A R x.
 Definition inputacc := ($run (tmQuoteInductive (thisfile, "Acc"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "Acc") inputacc).
 
 
-(*type constructor with lambda argument*)
 Inductive vec' (X:Type) : nat -> Type:=
   | vnil' : vec' X O
   | vcons' : X -> forall n:nat, (nat -> vec' X n) -> nat -> vec' X (S n)
   .
 Definition input_vec' := ($run (tmQuoteInductive (thisfile, "vec'"))).
 (* Print input_vec'. *)
-
 Compute $unquote (GenerateIdentity_param (thisfile, "vec'") input_vec').
 
 
@@ -727,7 +643,7 @@ with R : nat -> Type := R0 : R O | Rs: forall n, Point -> R n -> R (S n)
 with R' :Set := R's : forall n, R n -> R'
 .
 Definition inputpoint := ($run (tmQuoteInductive (thisfile, "Point"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "Point") inputpoint). *)
+Compute $unquote (GenerateIdentity_param (thisfile, "Point") inputpoint).
 
 
 Inductive ntree3 (A:Set) : nat -> Set :=
@@ -738,10 +654,6 @@ with nforest3 (A:Set) : Set :=
 .
 Definition inputtree3 := ($run (tmQuoteInductive (thisfile, "ntree3"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "ntree3") inputtree3).
-
-
-
-
 
 
 (*the result of previous examples still correct*)
