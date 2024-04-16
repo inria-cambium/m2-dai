@@ -315,7 +315,6 @@ Compute $unquote (GenerateIdentity_recursive (thisfile, "term2") input_term2).
 
 
 
-
 (* TODO list:
    - simple, non-recursive types (bool) DONE
    - simple, recursive types (nat) DONE
@@ -597,16 +596,77 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
   tFix (mapi myf ty.(ind_bodies)) 0
 .
 
+(* Print TemplateMonad. *)
 
+Notation "'$let' x ':=' c1 'in' c2" := (@bind _ _ _ _ c1 (fun x => c2))
+                                     (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
+
+Notation "'try' '$let' ' x ':=' c1 'in' c2 'else' c3" := (@bind _ _ _ _ c1 (fun y =>
+                                                              (match y with x => c2
+                                                                       | _ => c3
+                                                               end)))
+                                         (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
+
+Definition kn_myProjT2 :=
+  (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], "my_projT2").
+
+(* MetaCoq Test Quote nat. *)
+(* Definition *)
+(* Eval *)
+(* Lemma *)
+(* Instance *)
+(* Print *)
+(* Compute *)
+(* Check *)
+
+Definition generate_identity {A} (a : A) (out : option ident): TemplateMonad unit :=
+  $let t := tmQuote a in
+    match t with
+    | (tInd ind u) =>
+      let kn := ind.(inductive_mind) in
+      $let mind := tmQuoteInductive kn in
+      let id := GenerateIdentity_param kn mind in
+      $let u := tmUnquote id in
+      $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
+        match out with
+        | Some name => tmDefinitionRed name (Some hnf) r ;; ret tt
+        | None => tmPrint r
+        end
+    | _ => tmFail "no inductive"
+    end.
+
+Notation "'Derive' 'Identity' a 'as' id" := (generate_identity a (Some id)) (at level 0).
+
+Notation "'Print' 'Identity' a" := (generate_identity a None) (at level 0).
+
+MetaCoq Run Derive Identity nat as "id_nat'".
+Print id_nat'.
+
+Fail MetaCoq Run Derive Identity 0 as "id_nat'".
+MetaCoq Run Print Identity nat.
+
+(* Definition generate_identity' {A} (a : A) (out : option ident): TemplateMonad unit :=
+  try $let '(tInd ind u) := tmQuote a in
+      let kn := ind.(inductive_mind) in
+      $let mind := tmQuoteInductive kn in
+      let id := GenerateIdentity_param kn mind in
+      $let u := tmUnquote id in
+      $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
+      match out with
+      | Some i => tmDefinition i r ;; ret tt
+      | None => tmPrint r
+      end
+  else tmFail "no inductive". *)
 
 
 (*with both parameter and indice*)
 Inductive vec (X:Type) : nat -> Type:=
   | vnil : vec X O
   | vcons : X -> forall n:nat, vec X n -> vec X (S n).
-Definition input_vec := ($run (tmQuoteInductive (thisfile, "vec"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "vec") input_vec).
-
+(* Definition input_vec := ($run (tmQuoteInductive (thisfile, "vec"))).
+Compute $unquote (GenerateIdentity_param (thisfile, "vec") input_vec). *)
+MetaCoq Run Derive Identity vec as "id_vec".
+Print id_vec.
 
 
 (*mutual inductive type*)
@@ -617,9 +677,8 @@ with nforest (A:Set) : Set :=
   | ncons (a:ntree A) (b:nforest A): nforest A
 .
 (* Parameters should be syntactically the same for each inductive type. *)
-Definition inputtree := ($run (tmQuoteInductive (thisfile, "ntree"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "ntree") inputtree).
-
+MetaCoq Run Derive Identity ntree as "id_ntree".
+Print id_ntree.
 
 Inductive ntree2 (A:Set) : nat -> Set :=
   nnode2 (a:A) (n:nat) : nforest2 A -> ntree2 A n
@@ -627,24 +686,23 @@ with nforest2 (A:Set) : Set :=
   | nnil2: nforest2 A
   | ncons2 (n:nat) (a:ntree2 A n) (b:nforest2 A): nforest2 A
 .
-Definition inputtree2 := ($run (tmQuoteInductive (thisfile, "ntree2"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "ntree2") inputtree2).
+MetaCoq Run Derive Identity ntree2 as "id_ntree2".
+Print id_ntree2.
 
 
 (*type constructor with lambda argument*)
 Inductive Acc (A : Type) (R : A -> A -> Type) (x : A) : Type :=
 	Acc_intro  :(forall y : A, R y x -> Acc A R y) -> Acc A R x.
-Definition inputacc := ($run (tmQuoteInductive (thisfile, "Acc"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "Acc") inputacc).
+MetaCoq Run Derive Identity Acc as "id_acc".
+Print id_acc.
 
 
 Inductive vec' (X:Type) : nat -> Type:=
   | vnil' : vec' X O
   | vcons' : X -> forall n:nat, (nat -> vec' X n) -> nat -> vec' X (S n)
   .
-Definition input_vec' := ($run (tmQuoteInductive (thisfile, "vec'"))).
-(* Print input_vec'. *)
-Compute $unquote (GenerateIdentity_param (thisfile, "vec'") input_vec').
+MetaCoq Run Derive Identity vec' as "id_vec'".
+Print id_vec'.
 
 
 Inductive Point : Type :=
@@ -663,8 +721,8 @@ with Config : Type :=
 with R : nat -> Type := R0 : R O | Rs: forall n, Point -> R n -> R (S n)
 with R' :Set := R's : forall n, R n -> R'
 .
-Definition inputpoint := ($run (tmQuoteInductive (thisfile, "Point"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "Point") inputpoint).
+MetaCoq Run Derive Identity Point as "id_point".
+Print id_point.
 
 
 Inductive ntree3 (A:Set) : nat -> Set :=
@@ -673,8 +731,8 @@ with nforest3 (A:Set) : Set :=
   | nnil3: nforest3 A
   | ncons3 (n:nat) (_:nat -> ntree3 A n) (_:nforest3 A): nforest3 A
 .
-Definition inputtree3 := ($run (tmQuoteInductive (thisfile, "ntree3"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "ntree3") inputtree3).
+MetaCoq Run Derive Identity ntree3 as "id_ntree3".
+Print id_ntree3.
 
 
 (*the result of previous examples still correct*)
@@ -684,10 +742,19 @@ Compute $unquote (GenerateIdentity_param (thisfile, "three") input2).
 Inductive list' (X:Type) :=
 | nil'
 | cons' : X -> list' X -> list' X.
-Definition input5 := ($run (tmQuoteInductive (thisfile, "list'"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "list'") input5).
+MetaCoq Run Derive Identity list' as "id_list'".
+Print id_list'.
 
 
+Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
+   All2_nil : All2 A B R [] []
+   | All2_cons : forall (x : A) (y : B) (l : list A) (l' : list B),
+                 R x y -> All2 A B R l l' -> All2 A B R (x :: l) (y :: l').
+MetaCoq Run Derive Identity All2 as "id_all2".
+Print id_all2.
+
+
+(*
 Inductive Fin0 (n:nat) : Set :=
 | fzero0: Fin0 n
 | fS0: Fin0 n -> Fin0 n.
@@ -744,41 +811,5 @@ Inductive test0 : nat -> nat -> Set :=
 | tSS : forall n, test0 n (S n) -> test0 (S (S n)) n.
 Definition input_t := ($run (tmQuoteInductive (thisfile, "test0"))).
 Compute $unquote (GenerateIdentity_param (thisfile, "test0") input_t).
-
-
-(*with both parameter and indice*)
-(* Inductive vec (X:Type) : nat -> Type:=
-  | vnil : vec X O
-  | vcons : X -> forall n:nat, vec X n -> vec X (S n).
-Definition input_vec := ($run (tmQuoteInductive (thisfile, "vec"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "vec") input_vec). *)
-
-
-Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
-   All2_nil : All2 A B R [] []
-   | All2_cons : forall (x : A) (y : B) (l : list A) (l' : list B),
-                 R x y -> All2 A B R l l' -> All2 A B R (x :: l) (y :: l').
-Definition input_all2 := ($run (tmQuoteInductive (thisfile, "All2"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "All2") input_all2).
-
-
-
-(* Inductive Point : Type :=
-  | Pt : Config -> Config -> Point
-with Line : Type :=
-  | Ln : Point -> Point -> Line
-  | Ext : Line -> Line
-with Circle : Type :=
-  | Crc : Point -> Line -> Circle
-with Figure : Type :=
-  | P : Point -> Figure
-  | L : Line -> Figure
-  | C : Circle -> Figure
-with Config : Type :=
-  | Conf : list Figure -> Config
-.
-Definition inputpoint := ($run (tmQuoteInductive (thisfile, "Point"))).
-Compute $unquote (GenerateIdentity_param (thisfile, "Point") inputpoint). *)
-
-
+ *)
 
