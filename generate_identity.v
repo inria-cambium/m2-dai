@@ -332,40 +332,48 @@ Compute $unquote (GenerateIdentity_recursive (thisfile, "term2") input_term2).
 
 
 
-Fixpoint listmake (X:Type) (x:X) (n:Datatypes.nat) :=
+Fixpoint listmake {X:Type} (x:X) (n:Datatypes.nat) :=
   match n with
   | Datatypes.O => []
-  | Datatypes.S n => cons x (listmake _ x n) end.
+  | Datatypes.S n => cons x (listmake x n) end.
 
 
+(*
+  Inductive T (Param_1) ... (Param_k) : Indice_1 -> ... Indice_m -> Set :=
+    | Ctr arg_1 arg_2 ... arg_n : T ....
 
-
-
-
-
-
+  with T_1
+  ...
+  with T_j ...
+  .
+*)
 Record extrainfo:Set := mkinfo
   {
-    id_index0: nat;
-    id_index1: nat;
+    id_index0: nat;          (*De bruijn indice of `T`*) (*example above*)
+    id_index1: nat;          (*De bruijn indice of `T_j`*)
 
-    index_param: nat;
-    index_arg: nat;
+    index_param: nat;        (*De bruijn indice of `Param_k`*)
+    index_arg: nat;          (*De bruijn indice of `arg_n`*)
 
-    offset_param : nat;
-    offset_arg : nat
+    offset_param : nat;      (*Difference between De bruijn indice of parameters
+                               of the type definition and of the identity function *)
+    offset_arg : nat         (*Difference between De bruijn indice of arguments
+                               of the type definition and of the identity function *)
   }.
 
+(*Given the De bruijn indice of a var in the type definition,
+  get the corresponding De bruijn indice in identity function *)
 Definition geti (extrainfo:extrainfo) (i:nat) :=
   if leb extrainfo.(index_param) i then extrainfo.(offset_param) + i
   else if leb extrainfo.(index_arg) i then extrainfo.(offset_arg)  + i
   else i.
 
+(*check that the De bruijn indice `i` points to the `T` or `T_1` or ... `T_j`*)
 Definition is_recursive_call (extrainfo:extrainfo) (i:nat) :=
   leb extrainfo.(id_index0) i && leb i extrainfo.(id_index1).
 
-
-Definition update2 (extrainfo:extrainfo) :=
+(*update the extrainfo while traversing the arguments "backwards" by one*)
+Definition update_arg (extrainfo:extrainfo) :=
   mkinfo (extrainfo.(id_index0) - 1)
     (extrainfo.(id_index1) - 1)
     (extrainfo.(index_param) - 1)
@@ -374,16 +382,39 @@ Definition update2 (extrainfo:extrainfo) :=
     (extrainfo.(offset_arg) + 1 )
     .
 
+(*update the extrainfo while traversing the inner structure of lambda type argument,
 
-Definition update3 (extrainfo:extrainfo) :=
+  ex. Inductive term := ... |  Lam (nat -> list nat -> term).
+
+      when treate the arg of type `nat -> list nat -> term`,
+      terverse this type layer by layer, (first `nat`, then `list nat`)
+      each time the depth increases 1, use the update function below
+*)
+Definition update_lambda (extrainfo:extrainfo) :=
   mkinfo (extrainfo.(id_index0) + 1)
     (extrainfo.(id_index1) + 1)
     (extrainfo.(index_param) + 1)
     (extrainfo.(index_arg) + 1 )
-    (extrainfo.(offset_param) )
-    (extrainfo.(offset_arg) )
+    (extrainfo.(offset_param))
+    (extrainfo.(offset_arg))
     .
 
+Fixpoint map_with_extrainfo {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
+  (info:extrainfo) (update:extrainfo -> extrainfo):=
+  match l with
+  | x :: l => (f x info) :: (map_with_extrainfo f l (update info) update)
+  | _ => []
+  end.
+
+Definition mapi_with_extrainfo {X Y:Type} (f:X -> nat -> extrainfo -> Y) (l:list X)
+  (info:extrainfo) (update:extrainfo -> extrainfo):=
+  let fix Ffix f l info update i :=
+    match l with
+    | x :: l => (f x i info) :: (Ffix f l (update info) update (i+1))
+    | _ => []
+    end
+  in
+  Ffix f l info update 0.
 
 
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
@@ -426,22 +457,15 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
             (1 - 0 + 1 + length indices )
             (1 - 0 )
           in
-
-
           (*Take Vector.t for example,
               Inductive vec (X:Type) : nat -> Set :=
                 ...
                 vcons (x:X) (n:nat) (v:vec X n) -> vec X (S n)
-                ...
-
               generate an id_vec:
-
               Fixpoint id_vec (X:Type) (n;nat) (v:Vec X n) :=
                 match v with
                 ...
-                | vcons x n v => vcons x n (id_vec X n v)
-                ...
-          *)
+                | vcons x n v => vcons x n (id_vec X n v)          *)
 
             tApp
               (*the type constructor*) (*vcons*)
@@ -450,87 +474,84 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 ((plus' (1 + b.(cstr_arity)) seq_param)
                   ++
                  (rev
-                   (let fix auxarg extrainfo i args :=
-                      match args with
-                      | arg :: args =>
-                        (match arg.(decl_type) with
-                          (*type with indice/parameter*)
-                          | tApp (tRel j) tl =>
-                            if  is_recursive_call extrainfo j
-                            then
-                              tApp
-                                (*recursive call of the identity function*) (*id_vec*)
-                                (tRel (geti extrainfo j))
-                                (*the parameter/indice of the identity function*) (*X n*)
-                                ((map
-                                  (fix Ffix (t:term) : term :=
-                                    match t with
-                                    | tRel k => tRel (geti extrainfo k)
-                                    | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
-                                    | _ => t (* todo *)
-                                    end) tl)
-                                    (*the last argument*) (*v*)
-                                  ++ [tRel i])
-                            else tRel i
-                          (*type without indice/parameter*)
-                          | tRel j =>
-                            if is_recursive_call extrainfo j
-                            then
-                              tApp (tRel (geti extrainfo j)) [tRel i]
-                            else tRel i
-                          (*constructor with lambda type argument*)
+                   (let auxarg arg i extrainfo:=
+                      match arg.(decl_type) with
+                      (*type with indice/parameter*)
+                      | tApp (tRel j) tl =>
+                        if  is_recursive_call extrainfo j
+                        then
+                          tApp
+                            (*recursive call of the identity function*) (*id_vec*)
+                            (tRel (geti extrainfo j))
+                            (*the parameter/indice of the identity function*) (*X n*)
+                            ((map
+                              (fix Ffix (t:term) : term :=
+                                match t with
+                                | tRel k => tRel (geti extrainfo k)
+                                | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                | _ => t (* todo *)
+                                end) tl)
+                                (*the last argument*) (*v*)
+                              ++ [tRel i])
+                        else tRel i
+                      (*type without indice/parameter*)
+                      | tRel j =>
+                        if is_recursive_call extrainfo j
+                        then
+                          tApp (tRel (geti extrainfo j)) [tRel i]
+                        else tRel i
+                      (*constructor with lambda type argument*)
+                      | tProd _ t1 t2 =>
+                        (***********)
+                        (*for lambda type argument*)
+                        let fix check_type (t:term) (n1 n2:Nat.t): Datatypes.bool :=
+                          match t with
+                          | tProd _ _ t => check_type t (n1+1) (n2+1)
+                          | tRel i => (leb n1 i) && (leb i n2)
+                          | tApp (tRel i) _ => (leb n1 i) &&  (leb i n2)
+                          | _ => Datatypes.false
+                          end in
+                        let fix transformer (t:term) (u:term) extrainfo :=
+                          let fix lift (t:term) :term :=
+                            match t with
+                            | tRel i => tRel (i+1)
+                            | tApp t tl => tApp (lift t) (map lift tl)
+                            | _ => todo
+                            end
+                          in
+                          let fix smt extrainfo t:=
+                            match t with
+                            | tRel i => tRel (geti extrainfo i)
+                            | tApp t tl => tApp (smt extrainfo t) (map (smt extrainfo) tl)
+                            | tLambda name t1 t2 => tLambda name (smt extrainfo t1) (smt (update_lambda extrainfo) t2)
+                            | _ => t
+                            end
+                          in
+                          match t with
                           | tProd _ t1 t2 =>
-                            (***********)
-                            (*for lambda type argument*)
-                            let fix check_type (t:term) (n1 n2:Nat.t): Datatypes.bool :=
-                              match t with
-                              | tProd _ _ t => check_type t (n1+1) (n2+1)
-                              | tRel i => (leb n1 i) && (leb i n2)
-                              | tApp (tRel i) _ => (leb n1 i) &&  (leb i n2)
-                              | _ => Datatypes.false
-                              end in
-                            let fix transformer (t:term) (u:term) extrainfo:=
-                              let fix lift (t:term) :term :=
-                                match t with
-                                | tRel i => tRel (i+1)
-                                | tApp t tl => tApp (lift t) (map lift tl)
-                                | _ => todo
-                                end
-                              in
-                              let fix smt extrainfo t:=
-                                match t with
-                                | tRel i => tRel (geti extrainfo i)
-                                | tApp t tl => tApp (smt extrainfo t) (map (smt extrainfo) tl)
-                                | tLambda name t1 t2 => tLambda name (smt extrainfo t1) (smt (update3 extrainfo) t2)
-                                | _ => t
-                                end
-                              in
-                              match t with
-                              | tProd _ t1 t2 =>
-                                tLambda the_name (smt extrainfo t1)
-                                  (transformer t2 (tApp (lift u) [tRel 0]) (update3 extrainfo))
-                              | tApp (tRel j) tl =>
-                                  tApp (tRel (geti extrainfo j))
-                                    (((map
-                                          (fix Ffix (t:term) : term :=
-                                            match t with
-                                            | tRel k => tRel (geti extrainfo k)
-                                            | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
-                                            | _ => t
-                                            end) tl))
-                                    ++ [u])
-                              | tRel i => tApp (tRel (geti extrainfo i)) [u] (*called only when check_type is true*)
-                              | _ => todo
-                              end in
-                            (***********)
-                            if (check_type t2 (1+extrainfo.(id_index0)) (1+extrainfo.(id_index1)))
-                            then
-                              transformer arg.(decl_type) (tRel i) extrainfo
-                            else tRel i
-                          | _ => tRel i end) :: auxarg (update2 extrainfo) (i+1) args
-                      | _ => [] end
+                            tLambda the_name (smt extrainfo t1)
+                              (transformer t2 (tApp (lift u) [tRel 0]) (update_lambda extrainfo))
+                          | tApp (tRel j) tl =>
+                              tApp (tRel (geti extrainfo j))
+                                (((map
+                                      (fix Ffix (t:term) : term :=
+                                        match t with
+                                        | tRel k => tRel (geti extrainfo k)
+                                        | tApp tx tl => tApp (Ffix tx) (map Ffix tl)
+                                        | _ => t
+                                        end) tl))
+                                ++ [u])
+                          | tRel i => tApp (tRel (geti extrainfo i)) [u] (*called only when check_type is true*)
+                          | _ => todo
+                          end in
+                        (***********)
+                        if (check_type t2 (1+extrainfo.(id_index0)) (1+extrainfo.(id_index1)))
+                        then
+                          transformer arg.(decl_type) (tRel i) extrainfo
+                        else tRel i
+                      | _ => tRel i end
                     in
-                    auxarg extrainfo 0 b.(cstr_args))
+                    mapi_with_extrainfo auxarg b.(cstr_args) extrainfo update_arg)
                   )
                 )
       |}
@@ -562,7 +583,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
             {|
               puinst := []%list;
               pparams := plus' 1 seq_param;
-              pcontext := listmake _ the_name (1 + (length indices));
+              pcontext := listmake the_name (1 + (length indices));
               preturn :=
                 tApp (tInd the_inductive Instance.empty)
                   ((plus' (1 + 1 + length indices) seq_param) ++ (plus' 1 seq_indice))
