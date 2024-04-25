@@ -361,7 +361,7 @@ Definition lookup_list (l : list information) (na : string) : list (BasicAst.con
                     | information_nat na' n => String.eqb na na'
               end) l  with
     Some (information_list na l) => l
-  | _ => todo
+  | _ => todo (* or [] ?*)
   end.
 
 Definition lookup_item (l : list information) (na : string) : nat :=
@@ -373,28 +373,39 @@ Definition lookup_item (l : list information) (na : string) : nat :=
   | _ => todo
   end.
 
-(* Fixpoint replace_info (info:list information) (na:string)  (l : list (BasicAst.context_decl nat)) :=
+Fixpoint replace_info (info:list information) (na:string)  (l : list (BasicAst.context_decl nat)) :=
   match info with
   | (information_list s l0) :: info' =>
       if String.eqb s na then (information_list na l) :: info'
       else (information_list s l0) :: (replace_info info' na l)
   | h :: info' => h :: (replace_info info' na l)
-  | _ => todo
-  end. *)
+  | [] => (information_list na l) :: []
+  (* (information_list na l) :: [] *)
+  end.
 
-(* Inductive  *)
+Fixpoint replace_add_info (info:list information) (na:string) (item : BasicAst.context_decl nat) :=
+  match info with
+  | (information_list s l0) :: info' =>
+      if String.eqb s na then (information_list s (item::l0)) :: info'
+      else (information_list s l0) :: (replace_add_info info' na item)
+  | h :: info' => h :: (replace_add_info info' na item)
+  | [] => (information_list na [item]) :: []
+  (* (information_list na l) :: [] *)
+  end.
+
 
 Record extrainfo_gen : Type := mkinfo_gen {
   renaming_gen : list (BasicAst.context_decl nat);
 
   info : list information ;
-  (*may need to distinguish the "type side" and "function side"*)
-  (*                            read context    write context *)
 }.
 
 Definition empty_info := {|
   renaming_gen := [];
-  info := []
+  info := [
+    information_list "params" [];
+    information_list "indices" []
+  ]
 |}.
 
 Definition add_listinfo e na l :=
@@ -418,41 +429,78 @@ Definition add_id (e:extrainfo_gen) : extrainfo_gen :=
   (* in
   mkinfo_gen e.(renaming_gen) ((information_list "rels_of_id" l)::e.(info)). *)
 
-Definition add_params (e : extrainfo_gen) (ctx : context): extrainfo_gen :=
-  let params:= mapi (fun i x => mkdeclnat x.(decl_name) None i) ctx in
-  let renaming_gen := params ++ (plus_k_index e.(renaming_gen) (length params)) in
-  let info_new := map (
-    fun x => match x with
-    | information_list na l => information_list na (plus_k_index l (length params))
-    | information_nat na n => information_nat na (n + length params) end
-    ) e.(info) in
-  mkinfo_gen renaming_gen ((information_list "params" params) :: info_new).
+(*for lambda term appear in the type definition*)
+Definition update_lambda_type_arg (na:aname) (e:extrainfo_gen) (saveinfo:option string):=
+  let item := mkdeclnat na None 0 in
+  let renaming_gen :=
+    item :: (plus_one_index e.(renaming_gen))
+  in
+  let info :=
+    map (
+      fun x => match x with
+      | information_list na l => information_list na (plus_one_index l)
+      | information_nat na n => information_nat na (1 + n) end
+    ) e.(info)
+  in
+  (* mkinfo_gen renaming_gen info *)
+  match saveinfo with
+  | None => mkinfo_gen renaming_gen info
+  | Some str =>
+      mkinfo_gen renaming_gen
+        (replace_add_info info str item)
+  end
+  .
 
-Definition add_indices (e : extrainfo_gen) (ctx : context): extrainfo_gen :=
-  let indices := mapi (fun i x => mkdeclnat x.(decl_name) None i) ctx in
-  let renaming_gen := (plus_k_index e.(renaming_gen) (length indices)) in
+(*for lambda term only appear in the function generated*)
+Definition update_lambda_f na (e:extrainfo_gen) (saveinfo:option string) : extrainfo_gen :=
+  let renaming_gen := e.(renaming_gen) in
   let info := e.(info) in
   let info_new := map (
     fun x => match x with
     | information_list na l =>
         if String.eqb na "rels_of_T" then x else
-        information_list na (plus_k_index l (length indices))
-    | information_nat na n => information_nat na (n + length indices) end
+        information_list na (plus_one_index l)
+    | information_nat na n => information_nat na (1 + n) end
   ) info in
-  mkinfo_gen renaming_gen ((information_list "indices" indices) :: info_new).
+  let renaming_new := plus_one_index renaming_gen in
+  match saveinfo with
+  | None =>
+      let name := match na.(binder_name) with
+        | nAnon => "newvar"
+        | nNamed s => s end
+      in
+      mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
+  | Some str =>
+      mkinfo_gen renaming_new
+        (replace_add_info info_new str (mkdeclnat na None 0))
+  end.
 
-Definition fancy_it_mkProd_or_LetIn (ctx:context) (na:string) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
-  if String.eqb na "params" then
-    let e' := add_params e ctx in
-    it_mkProd_or_LetIn ctx (t e')
+Definition kpProd_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix e ctx :=
+    match ctx with
+    | [] => e
+    | decl :: ctx' =>
+        Ffix (update_lambda_type_arg
+                decl.(decl_name) e saveinfo) ctx'
+    end
+  in
+  let e' := Ffix e ctx in
+  it_mkProd_or_LetIn ctx (t e').
 
-    else if String.eqb na "indices" then
-      let e' := add_indices e ctx in
-      it_mkProd_or_LetIn ctx (t e')
-    else todo
+Definition mkProd_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix e ctx :=
+    match ctx with
+    | [] => e
+    | decl :: ctx' =>
+        Ffix (update_lambda_f
+                decl.(decl_name) e saveinfo) ctx'
+    end
+  in
+  let e' := Ffix e ctx in
+  it_mkProd_or_LetIn ctx (t e')
   .
 
-(*not general enough... bad*)
+(*not general enough*)
 Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
   let update0 (e:extrainfo_gen) : extrainfo_gen :=
     let renaming_gen := e.(renaming_gen) in
@@ -467,58 +515,61 @@ Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term
   in
   tProd na (t1 e) (t2 (update0 e)).
 
-Definition fancy_it_mkLambda_or_LetIn (ctx:context) (na:string) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
-  if String.eqb na "params" then
-    let e' := add_params e ctx in
-    it_mkLambda_or_LetIn ctx (t e')
-
-    else if String.eqb na "indices" then
-      let e' := add_indices e ctx in
-      it_mkLambda_or_LetIn ctx (t e')
-    else todo
+Definition mkLambda_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix e ctx :=
+    match ctx with
+    | [] => e
+    | decl :: ctx' =>
+        Ffix (update_lambda_f
+                decl.(decl_name) e saveinfo) ctx'
+    end
+  in
+  let e' := Ffix e ctx in
+  it_mkLambda_or_LetIn ctx (t e')
   .
 
-(*not general enough... bad*)
-(*for lambda term only appear in the function generated*)
-Definition update_lambda_f na (e:extrainfo_gen) : extrainfo_gen :=
-  let renaming_gen := e.(renaming_gen) in
-  let info := e.(info) in
+Definition kpLambda_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix e ctx :=
+    match ctx with
+    | [] => e
+    | decl :: ctx' =>
+        Ffix (update_lambda_type_arg
+                decl.(decl_name) e saveinfo) ctx'
+    end
+  in
+  let e' := Ffix e ctx in
+  it_mkLambda_or_LetIn ctx (t e')
+  .
+
+Definition mktLambda na (e:extrainfo_gen) (t1:extrainfo_gen -> term)
+  (t2:extrainfo_gen -> term)
+  : term :=
+  tLambda na (t1 e) (t2 (update_lambda_f na e None)).
+
+Definition kptLambda na saveinfo (e:extrainfo_gen) (t1:extrainfo_gen -> term)
+  (t2:extrainfo_gen -> term)
+  : term :=
+  tLambda na (t1 e) (t2 (update_lambda_type_arg na e saveinfo)).
+
+(*only used in tCase*)
+Definition add_args (e:extrainfo_gen) (ctx: context): extrainfo_gen :=
+  let nargs := length ctx in
+  let l:= mapi (fun i x => mkdeclnat x.(decl_name) None i) (ctx) in
+  (*start with the last argument*)
+  let renaming_gen := (tl l) ++ (plus_k_index e.(renaming_gen) (nargs)) in
   let info_new := map (
     fun x => match x with
     | information_list na l =>
-        if String.eqb na "rels_of_T" then x else
-        information_list na (plus_one_index l)
-    | information_nat na n => information_nat na (1 + n) end
-  ) info in
-  let renaming_new := plus_one_index renaming_gen in
-  let name := match na.(binder_name) with
-    | nAnon => "var_lambda"
-    | nNamed s => s end in
-  let var := information_nat name 0 in
-  mkinfo_gen renaming_new (var :: info_new).
+        if String.eqb "rels_of_T" na  then
+          information_list na (plus_k_index l (nargs-1))
+        else
+          information_list na (plus_k_index l nargs)
+    | information_nat na n => information_nat na (n + nargs) end
+    ) e.(info) in
+  let arg := information_nat "arg_current" 0 in
+  mkinfo_gen (renaming_gen) (arg:: info_new).
 
-(*for lambda term appear in the type definition*)
-Definition update_lambda_type_arg (na:aname) (e:extrainfo_gen) :=
-  let renaming_gen :=
-    (mkdeclnat na None 0)
-    :: (plus_one_index e.(renaming_gen))
-  in
-  mkinfo_gen renaming_gen
-    (
-      map (
-        fun x => match x with
-        | information_list na l => information_list na (plus_one_index l)
-        | information_nat na n => information_nat na (1 + n) end
-      ) e.(info)
-    )
-  .
-
-Definition fancy_tLambda na (e:extrainfo_gen) (t1:extrainfo_gen -> term)
-  (update:aname -> extrainfo_gen -> extrainfo_gen) (t2:extrainfo_gen -> term)
-  : term :=
-  tLambda na (t1 e) (t2 (update na e)).
-
-Definition fancy_tCase (e:extrainfo_gen) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo_gen -> list (branch term)):term :=
+Definition fancy_tCase (e:extrainfo_gen) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo_gen -> list (context * (extrainfo_gen -> term))):term :=
   let pcontext := t5 e in
   let pparams := t4 e in
   (*very limited*)
@@ -541,33 +592,19 @@ Definition fancy_tCase (e:extrainfo_gen) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo_gen 
       ci_ind := t0 e ;
       ci_npar := length pparams;
       ci_relevance := t2 e
-   |}
+    |}
   {|
     puinst := t3 e;
     pparams := pparams;
     pcontext := pcontext;
     preturn := t6 (update_pcontext pcontext e)
   |}
-  (t7 e) (t8 e).
-
-Definition add_args (e:extrainfo_gen) (ctx: context): extrainfo_gen :=
-  let nargs := length ctx in
-  (* let l:= mapi (fun i x => mkdeclnat x.(decl_name) None i) ctx in
-  let renaming_gen := l ++ (plus_k_index e.(renaming_gen) (nargs)) in *)
-  let l:= mapi (fun i x => mkdeclnat x.(decl_name) None i) (ctx) in
-  (*start with the last argument*)
-  let renaming_gen := (tl l) ++ (plus_k_index e.(renaming_gen) (nargs)) in
-  let info_new := map (
-    fun x => match x with
-    | information_list na l =>
-        if String.eqb "rels_of_T" na  then
-          information_list na (plus_k_index l (nargs-1))
-        else
-          information_list na (plus_k_index l nargs)
-    | information_nat na n => information_nat na (n + nargs) end
-    ) e.(info) in
-  let arg := information_nat "arg_current" 0 in
-  mkinfo_gen (renaming_gen) (arg:: info_new).
+  (t7 e)
+  (map
+    (fun '(c, t) =>
+      {| bcontext := map decl_name c;
+         bbody := t (add_args e c) |})
+    (t8 e)).
 
 Definition update_ctr_arg_back (e:extrainfo_gen) : extrainfo_gen :=
   let info_new := map (
@@ -583,15 +620,15 @@ Definition update_ctr_arg_back (e:extrainfo_gen) : extrainfo_gen :=
   mkinfo_gen (tl e.(renaming_gen)) info_new
 .
 
-Definition map_with_extrainfo_gen {X Y:Type} (f:X -> extrainfo_gen -> Y) (l:list X)
-  (e:extrainfo_gen) (update:extrainfo_gen -> extrainfo_gen):=
-  let fix Ffix f l e update:=
+Definition map_with_extrainfo_gen_arg {X Y:Type} (f:X -> extrainfo_gen -> Y) (l:list X)
+  (e:extrainfo_gen) :=
+  let fix Ffix f l e:=
     match l with
-    | x :: l => (f x e) :: (Ffix f l (update e) update)
+    | x :: l => (f x e) :: (Ffix f l (update_ctr_arg_back e))
     | _ => []
     end
   in
-  Ffix f l e update.
+  Ffix f l e.
 
 Definition geti_gen (e:extrainfo_gen) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming_gen) in
@@ -624,7 +661,7 @@ Definition type_rename_transformer (e:extrainfo_gen) (t:term) : term:=
     match t with
     | tRel k => geti_gen e k
     | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
-    | tLambda name t1 t2 =>(*tProd ?*) tLambda name (Ffix e t1) (Ffix (update_lambda_type_arg name e) t2)
+    | tLambda name t1 t2 =>(*tProd ?*) tLambda name (Ffix e t1) (Ffix (update_lambda_type_arg name e None) t2)
     | _ => t (* todo *)
   end in
   Ffix e t.
@@ -649,98 +686,94 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
     let the_inductive := {| inductive_mind := na; inductive_ind := i |} in
     let indices := body.(ind_indices) in
 
-    let aux : extrainfo_gen -> Nat.t -> constructor_body -> branch term := fun e i b =>
-      {| bcontext := map (fun a => a.(decl_name)) b.(cstr_args) ;
-         bbody :=
-          let e := add_args e b.(cstr_args) in
-          let constructor_current := tConstruct the_inductive i Instance.empty in
-          tApp
-            constructor_current
-            ((*the type parameters*) (*X*)
-              ((rels_of "params" e))
-              ++
-              (rev
-                (let auxarg arg e:=
-                  (*current argument*)
-                  let arg_current := rel_of "arg_current" e in
-
-                  match arg.(decl_type) with
-                  (*type with indice/parameter*)
-                  | tApp (tRel j) tl =>
-                    match is_recursive_call_gen e j with
-                    | None => arg_current
-                    | Some kk =>
-                      tApp
-                        (*recursive call of the identity function*) (*id_vec*)
-                        (get_id_gen e kk)
-                        ( (*the parameter/indice of the identity function*) (*X n*)
-                          (map (type_rename_transformer e) tl)
-                          (*the last argument*) (*v*)
-                          ++ [arg_current])
-                    end
-                  | tRel j =>
-                    match is_recursive_call_gen e j with
-                    | None => arg_current
-                    | Some kk => tApp (get_id_gen e kk) [arg_current]
-                    end
-                  | tProd _ t1 t2 =>
-                    (***********)
-                    let fix check_type (t:term) (n1 n2:Nat.t): option nat :=
+    let aux : extrainfo_gen -> Nat.t -> constructor_body -> (context * (extrainfo_gen -> term)) := fun e i b =>
+      (b.(cstr_args),
+        fun e =>
+        let constructor_current := tConstruct the_inductive i Instance.empty in
+        tApp
+          constructor_current
+          ((*the type parameters*) (*X*)
+            ((rels_of "params" e))
+            ++
+            (rev
+              (let auxarg arg e:=
+                (*current argument*)
+                let arg_current := rel_of "arg_current" e in
+                match arg.(decl_type) with
+                (*type with indice/parameter*)
+                | tApp (tRel j) tl =>
+                  match is_recursive_call_gen e j with
+                  | None => arg_current
+                  | Some kk =>
+                    tApp
+                      (*recursive call of the identity function*) (*id_vec*)
+                      (get_id_gen e kk)
+                      ( (*the parameter/indice of the identity function*) (*X n*)
+                        (map (type_rename_transformer e) tl)
+                        (*the last argument*) (*v*)
+                        ++ [arg_current])
+                  end
+                | tRel j =>
+                  match is_recursive_call_gen e j with
+                  | None => arg_current
+                  | Some kk => tApp (get_id_gen e kk) [arg_current]
+                  end
+                | tProd _ t1 t2 =>
+                  (***********)
+                  let fix check_type (t:term) (n1 n2:Nat.t): option nat :=
+                    match t with
+                    | tProd _ _ t => check_type t (n1+1) (n2+1)
+                    | tRel i =>
+                      if (leb n1 i) && (leb i n2) then Some (i-n1) else None
+                    | tApp (tRel i) _ =>
+                      if (leb n1 i) && (leb i n2) then Some (i-n1) else None
+                    | _ => None
+                    end in
+                  let fix transformer (t:term) (u:term) (tid:term) e :=
+                    let fix lift (t:term) :term :=
                       match t with
-                      | tProd _ _ t => check_type t (n1+1) (n2+1)
-                      | tRel i =>
-                        if (leb n1 i) && (leb i n2) then Some (i-n1) else None
-                      | tApp (tRel i) _ =>
-                        if (leb n1 i) && (leb i n2) then Some (i-n1) else None
-                      | _ => None
-                      end in
-                    let fix transformer (t:term) (u:term) (tid:term) e :=
-                      let fix lift (t:term) :term :=
-                        match t with
-                        | tRel i => tRel (i+1)
-                        | tApp t tl => tApp (lift t) (map lift tl)
-                        | _ => todo (*impossible to take this branch*)
-                        end
-                      in
-                      match t with
-                      | tProd _ t1 t2 =>
-                        fancy_tLambda the_name e
-                          (fun e => type_rename_transformer e t1)
-                          update_lambda_type_arg
-                          (fun e =>
-                            transformer t2 (tApp (lift u) [tRel 0])
-                              (lift tid) e)
-                      | tApp (tRel j) tl =>
-                          tApp tid
-                            ((map (type_rename_transformer e) tl)
-                              ++ [u])
-                      | tRel _ => tApp tid [u]
-                      | _ => todo (* other cases exist? *)
-                      end in
-                    let l := lookup_list e.(info) "rels_of_T" in
-                    let id_index0 := (hd todo l).(decl_type) in
-                    let id_index1 := (last l todo).(decl_type) in
-                    match check_type t2 (1 + id_index0) (1 + id_index1) with
-                    | None => arg_current
-                    | Some kk =>
-                        transformer arg.(decl_type) arg_current (get_id_gen e kk) e
-                    end
-                    (***********)
-                  | _ => arg_current end
-                in
-                map_with_extrainfo_gen auxarg b.(cstr_args)
-                  (e) update_ctr_arg_back)
-              )
+                      | tRel i => tRel (i+1)
+                      | tApp t tl => tApp (lift t) (map lift tl)
+                      | _ => todo (*impossible to take this branch*)
+                      end
+                    in
+                    match t with
+                    | tProd _ t1 t2 =>
+                      kptLambda the_name None e
+                        (fun e => type_rename_transformer e t1)
+                        (fun e =>
+                          transformer t2 (tApp (lift u) [tRel 0])
+                            (lift tid) e)
+                    | tApp (tRel j) tl =>
+                        tApp tid
+                          ((map (type_rename_transformer e) tl)
+                            ++ [u])
+                    | tRel _ => tApp tid [u]
+                    | _ => todo (* other cases exist? *)
+                    end in
+                  let l := lookup_list e.(info) "rels_of_T" in
+                  let id_index0 := (hd todo l).(decl_type) in
+                  let id_index1 := (last l todo).(decl_type) in
+                  match check_type t2 (1 + id_index0) (1 + id_index1) with
+                  | None => arg_current
+                  | Some kk =>
+                      transformer arg.(decl_type) arg_current (get_id_gen e kk) e
+                  end
+                  (***********)
+                  (* arg_current *)
+                | _ => arg_current end
+              in
+              map_with_extrainfo_gen_arg auxarg b.(cstr_args) e)
             )
-      |}
+          ))
     in
 
     {|
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        fancy_it_mkProd_or_LetIn params "params" (initial_info) $
-          fun e => fancy_it_mkProd_or_LetIn indices "indices" e $
+        kpProd_or_LetIn (Some "params") params (initial_info) $
+          fun e => mkProd_or_LetIn (Some "indices") indices e $
             fun e =>
               fancy_tProd the_name e
                 (fun e => tApp
@@ -753,12 +786,11 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         ;
 
       dbody :=
-        fancy_it_mkLambda_or_LetIn params "params" (initial_info) $
-          fun e => fancy_it_mkLambda_or_LetIn indices "indices" e $
+        kpLambda_or_LetIn (Some "params") params (initial_info) $
+          fun e => mkLambda_or_LetIn (Some "indices") indices  e $
             fun e =>
-              fancy_tLambda the_name e
+              mktLambda the_name e
                 (fun e => tApp (tInd the_inductive Instance.empty)  (rels_of "params" e ++ rels_of "indices" e))
-                update_lambda_f
                 (fun e =>
                   fancy_tCase e
                     (fun _ => the_inductive)
@@ -842,7 +874,6 @@ Inductive Acc (A : Type) (R : A -> A -> Type) (x : A) : Type :=
   Acc A R x.
 MetaCoq Run Derive Identity Acc as "id_acc".
 Print id_acc.
-
 
 
 Inductive ntree2 (A:Set) : nat -> Set :=
