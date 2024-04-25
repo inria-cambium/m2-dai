@@ -518,8 +518,9 @@ Definition fancy_tLambda na (e:extrainfo_gen) (t1:extrainfo_gen -> term)
   : term :=
   tLambda na (t1 e) (t2 (update na e)).
 
-Definition fancy_tCase (e:extrainfo_gen) t0 t1 t2 t3 t4 t5 t6 t7 (t8:extrainfo_gen -> list (branch term)):term :=
+Definition fancy_tCase (e:extrainfo_gen) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo_gen -> list (branch term)):term :=
   let pcontext := t5 e in
+  let pparams := t4 e in
   (*very limited*)
   let update_pcontext pcontext e :=
     let renaming_gen := e.(renaming_gen) in
@@ -538,12 +539,12 @@ Definition fancy_tCase (e:extrainfo_gen) t0 t1 t2 t3 t4 t5 t6 t7 (t8:extrainfo_g
   tCase
     {|
       ci_ind := t0 e ;
-      ci_npar := t1 e;
+      ci_npar := length pparams;
       ci_relevance := t2 e
    |}
   {|
     puinst := t3 e;
-    pparams := t4 e;
+    pparams := pparams;
     pcontext := pcontext;
     preturn := t6 (update_pcontext pcontext e)
   |}
@@ -761,7 +762,6 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 (fun e =>
                   fancy_tCase e
                     (fun _ => the_inductive)
-                    (fun e => length (lookup_list e.(info) "params"))
                     (fun _ => Relevant)
                     (fun _ => [])
                     (fun e => rels_of "params" e)
