@@ -666,6 +666,29 @@ Definition type_rename_transformer (e:extrainfo_gen) (t:term) : term:=
   end in
   Ffix e t.
 
+Definition findi (x:nat) (l:list nat):=
+  let fix Ffix x l n:=
+    match l with
+    | [] => None
+    | y :: l' => if eqb y x then Some n else Ffix x l' (n+1)
+    end
+  in
+  Ffix x l 0.
+
+
+Definition check_return_type (t:term) (e:extrainfo_gen) : option nat :=
+  let fix Ffix t e {struct t}:=
+    match t with
+    | tRel i =>
+      let types := lookup_list e.(info) "rels_of_T" in
+      let types := map decl_type types in
+      findi i types
+    | tApp t _ => Ffix t e
+    | tProd name _  t2 => Ffix t2 (update_lambda_type_arg name e None)
+    | _ => None
+    end in
+  Ffix t e.
+
 
 Definition the_name := {| binder_name := nNamed "x";
                   binder_relevance := Relevant  |}.
@@ -688,7 +711,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 
     let aux : extrainfo_gen -> Nat.t -> constructor_body -> (context * (extrainfo_gen -> term)) := fun e i b =>
       (b.(cstr_args),
-        fun e =>
+       fun e =>
         let constructor_current := tConstruct the_inductive i Instance.empty in
         tApp
           constructor_current
@@ -718,18 +741,9 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   | None => arg_current
                   | Some kk => tApp (get_id_gen e kk) [arg_current]
                   end
-                | tProd _ t1 t2 =>
+                | tProd _ _ _ =>
                   (***********)
-                  let fix check_type (t:term) (n1 n2:Nat.t): option nat :=
-                    match t with
-                    | tProd _ _ t => check_type t (n1+1) (n2+1)
-                    | tRel i =>
-                      if (leb n1 i) && (leb i n2) then Some (i-n1) else None
-                    | tApp (tRel i) _ =>
-                      if (leb n1 i) && (leb i n2) then Some (i-n1) else None
-                    | _ => None
-                    end in
-                  let fix transformer (t:term) (u:term) (tid:term) e :=
+                  let fix transformer (t:term) (u:term) (n_id:nat) e :=
                     let fix lift (t:term) :term :=
                       match t with
                       | tRel i => tRel (i+1)
@@ -742,22 +756,18 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                       kptLambda the_name None e
                         (fun e => type_rename_transformer e t1)
                         (fun e =>
-                          transformer t2 (tApp (lift u) [tRel 0])
-                            (lift tid) e)
-                    | tApp (tRel j) tl =>
-                        tApp tid
+                          transformer t2 (tApp (lift u) [tRel 0]) n_id e)
+                    | tApp (tRel _) tl =>
+                        tApp (get_id_gen e n_id)
                           ((map (type_rename_transformer e) tl)
                             ++ [u])
-                    | tRel _ => tApp tid [u]
+                    | tRel _ => tApp (get_id_gen e n_id) [u]
                     | _ => todo (* other cases exist? *)
                     end in
-                  let l := lookup_list e.(info) "rels_of_T" in
-                  let id_index0 := (hd todo l).(decl_type) in
-                  let id_index1 := (last l todo).(decl_type) in
-                  match check_type t2 (1 + id_index0) (1 + id_index1) with
+                  match check_return_type arg.(decl_type) e with
                   | None => arg_current
                   | Some kk =>
-                      transformer arg.(decl_type) arg_current (get_id_gen e kk) e
+                      transformer arg.(decl_type) arg_current kk e
                   end
                   (***********)
                   (* arg_current *)
