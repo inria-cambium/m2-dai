@@ -97,7 +97,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         kpProd_or_LetIn (Some "params") params (initial_info) $
           fun e => mkProd_or_LetIn (Some "indices") indices e $
             fun e =>
-              fancy_tProd the_name e
+              kptProd0 None the_name e
                 (fun e => tApp
                   (tInd the_inductive Instance.empty)
                     (rels_of "params" e ++ rels_of "indices" e))

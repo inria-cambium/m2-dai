@@ -175,8 +175,18 @@ Definition mkProd_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_g
   it_mkProd_or_LetIn ctx (t e')
   .
 
+
+Definition mktProd0 (saveinfo:option string) na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+  let e' := update_lambda_f na e saveinfo in
+  tProd na (t1 e) (t2 e').
+
+
+Definition kptProd0 (saveinfo:option string) na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+  let e' := update_lambda_type_arg na e saveinfo in
+  tProd na (t1 e) (t2 e').
+
 (*not general enough*)
-Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+(* Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
   let update0 (e:extrainfo_gen) : extrainfo_gen :=
     let renaming_gen := e.(renaming_gen) in
     let info := e.(info) in
@@ -185,10 +195,58 @@ Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term
       | information_list na l => information_list na (plus_one_index l)
       | information_nat na n => information_nat na (1 + n) end
     ) info in
+
+    let name := match na.(binder_name) with
+      | nAnon => "newvar"
+      | nNamed s => s end
+    in
+
     let renaming_new := plus_one_index renaming_gen in
-    mkinfo_gen renaming_new info_new
+    mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
+  in
+  tProd na (t1 e) (t2 (update0 e)). *)
+
+
+(* Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+  let update0 (e:extrainfo_gen) : extrainfo_gen :=
+    let renaming_gen := e.(renaming_gen) in
+    let info := e.(info) in
+    let info_new := map (
+      fun x => match x with
+      | information_list na l => information_list na (plus_one_index l)
+      | information_nat na n => information_nat na (1 + n) end
+    ) info in
+
+    let name := match na.(binder_name) with
+      | nAnon => "newvar"
+      | nNamed s => s end
+    in
+
+    let renaming_new := plus_one_index renaming_gen in
+    mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
+  in
+  tProd na (t1 e) (t2 (update0 e)). *)
+
+(* Definition kptProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+  let update0 (e:extrainfo_gen) : extrainfo_gen :=
+    let renaming_gen := e.(renaming_gen) in
+    let info := e.(info) in
+    let info_new := map (
+      fun x => match x with
+      | information_list na l => information_list na (plus_one_index l)
+      | information_nat na n => information_nat na (1 + n) end
+    ) info in
+
+    let name := match na.(binder_name) with
+      | nAnon => "newvar"
+      | nNamed s => s end
+    in
+
+    let renaming_new := (mkdeclnat na None 0) :: (plus_one_index renaming_gen) in
+    mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
   in
   tProd na (t1 e) (t2 (update0 e)).
+ *)
 
 Definition mkLambda_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
   let fix Ffix e ctx :=
