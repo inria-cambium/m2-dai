@@ -150,140 +150,6 @@ Definition update_lambda_f na (e:extrainfo_gen) (saveinfo:option string) : extra
         (replace_add_info info_new str (mkdeclnat na None 0))
   end.
 
-Definition kpProd_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
-  let fix Ffix e ctx :=
-    match ctx with
-    | [] => e
-    | decl :: ctx' =>
-        Ffix (update_lambda_type_arg
-                decl.(decl_name) e saveinfo) ctx'
-    end
-  in
-  let e' := Ffix e ctx in
-  it_mkProd_or_LetIn ctx (t e').
-
-Definition mkProd_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
-  let fix Ffix e ctx :=
-    match ctx with
-    | [] => e
-    | decl :: ctx' =>
-        Ffix (update_lambda_f
-                decl.(decl_name) e saveinfo) ctx'
-    end
-  in
-  let e' := Ffix e ctx in
-  it_mkProd_or_LetIn ctx (t e')
-  .
-
-
-Definition mktProd0 (saveinfo:option string) na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
-  let e' := update_lambda_f na e saveinfo in
-  tProd na (t1 e) (t2 e').
-
-
-Definition kptProd0 (saveinfo:option string) na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
-  let e' := update_lambda_type_arg na e saveinfo in
-  tProd na (t1 e) (t2 e').
-
-(*not general enough*)
-(* Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
-  let update0 (e:extrainfo_gen) : extrainfo_gen :=
-    let renaming_gen := e.(renaming_gen) in
-    let info := e.(info) in
-    let info_new := map (
-      fun x => match x with
-      | information_list na l => information_list na (plus_one_index l)
-      | information_nat na n => information_nat na (1 + n) end
-    ) info in
-
-    let name := match na.(binder_name) with
-      | nAnon => "newvar"
-      | nNamed s => s end
-    in
-
-    let renaming_new := plus_one_index renaming_gen in
-    mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
-  in
-  tProd na (t1 e) (t2 (update0 e)). *)
-
-
-(* Definition fancy_tProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
-  let update0 (e:extrainfo_gen) : extrainfo_gen :=
-    let renaming_gen := e.(renaming_gen) in
-    let info := e.(info) in
-    let info_new := map (
-      fun x => match x with
-      | information_list na l => information_list na (plus_one_index l)
-      | information_nat na n => information_nat na (1 + n) end
-    ) info in
-
-    let name := match na.(binder_name) with
-      | nAnon => "newvar"
-      | nNamed s => s end
-    in
-
-    let renaming_new := plus_one_index renaming_gen in
-    mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
-  in
-  tProd na (t1 e) (t2 (update0 e)). *)
-
-(* Definition kptProd na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
-  let update0 (e:extrainfo_gen) : extrainfo_gen :=
-    let renaming_gen := e.(renaming_gen) in
-    let info := e.(info) in
-    let info_new := map (
-      fun x => match x with
-      | information_list na l => information_list na (plus_one_index l)
-      | information_nat na n => information_nat na (1 + n) end
-    ) info in
-
-    let name := match na.(binder_name) with
-      | nAnon => "newvar"
-      | nNamed s => s end
-    in
-
-    let renaming_new := (mkdeclnat na None 0) :: (plus_one_index renaming_gen) in
-    mkinfo_gen renaming_new ((information_nat name 0) :: info_new)
-  in
-  tProd na (t1 e) (t2 (update0 e)).
- *)
-
-Definition mkLambda_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
-  let fix Ffix e ctx :=
-    match ctx with
-    | [] => e
-    | decl :: ctx' =>
-        Ffix (update_lambda_f
-                decl.(decl_name) e saveinfo) ctx'
-    end
-  in
-  let e' := Ffix e ctx in
-  it_mkLambda_or_LetIn ctx (t e')
-  .
-
-Definition kpLambda_or_LetIn (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
-  let fix Ffix e ctx :=
-    match ctx with
-    | [] => e
-    | decl :: ctx' =>
-        Ffix (update_lambda_type_arg
-                decl.(decl_name) e saveinfo) ctx'
-    end
-  in
-  let e' := Ffix e ctx in
-  it_mkLambda_or_LetIn ctx (t e')
-  .
-
-Definition mktLambda na (e:extrainfo_gen) (t1:extrainfo_gen -> term)
-  (t2:extrainfo_gen -> term)
-  : term :=
-  tLambda na (t1 e) (t2 (update_lambda_f na e None)).
-
-Definition kptLambda na saveinfo (e:extrainfo_gen) (t1:extrainfo_gen -> term)
-  (t2:extrainfo_gen -> term)
-  : term :=
-  tLambda na (t1 e) (t2 (update_lambda_type_arg na e saveinfo)).
-
 (*only used in tCase*)
 Definition add_args (e:extrainfo_gen) (ctx: context): extrainfo_gen :=
   let nargs := length ctx in
@@ -363,9 +229,11 @@ Definition map_with_extrainfo_gen_arg {X Y:Type} (f:X -> extrainfo_gen -> Y) (l:
   in
   Ffix f l e.
 
+Axiom print_info: extrainfo_gen -> forall {A}, A .
+
 Definition geti_gen (e:extrainfo_gen) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming_gen) in
-  tRel (nth i l todo).
+  tRel (nth i l (print_info e)).
 
 Definition get_id_gen (e:extrainfo_gen) (i:nat) :=
   let l := lookup_list e.(info) "rels_of_id" in
@@ -408,7 +276,6 @@ Definition findi (x:nat) (l:list nat):=
   in
   Ffix x l 0.
 
-
 Definition check_return_type (t:term) (e:extrainfo_gen) : option nat :=
   let fix Ffix t e {struct t}:=
     match t with
@@ -421,3 +288,68 @@ Definition check_return_type (t:term) (e:extrainfo_gen) : option nat :=
     | _ => None
     end in
   Ffix t e.
+
+
+Definition mktProd (saveinfo:option string) na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+  let e' := update_lambda_f na e saveinfo in
+  tProd na (t1 e) (t2 e').
+
+Definition kptProd (saveinfo:option string) na e (t1:extrainfo_gen -> term) (t2:extrainfo_gen -> term) :=
+  let e' := update_lambda_type_arg na e saveinfo in
+  tProd na (t1 e) (t2 e').
+
+Definition it_kptProd (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix ctx e t:=
+    match ctx with
+    | [] => t e
+    | decl :: ctx' =>
+        kptProd saveinfo decl.(decl_name) e (fun e => type_rename_transformer e decl.(decl_type))
+          (fun e => Ffix ctx' e t)
+  end in
+  Ffix ctx e t.
+
+Definition it_mktProd (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix ctx e e0 t:=
+    match ctx with
+    | [] => t e0
+    | decl :: ctx' =>
+        let e' := update_lambda_type_arg decl.(decl_name) e saveinfo in
+        let e0 := update_lambda_f decl.(decl_name) e0 saveinfo in
+        tProd decl.(decl_name) (type_rename_transformer e decl.(decl_type) )
+          (Ffix ctx' e' e0 t)
+  end in
+  Ffix ctx e e t.
+
+Definition mktLambda saveinfo na (e:extrainfo_gen)  (t1:extrainfo_gen -> term)
+  (t2:extrainfo_gen -> term)
+  : term :=
+  tLambda na (t1 e) (t2 (update_lambda_f na e saveinfo)).
+
+Definition kptLambda saveinfo na (e:extrainfo_gen) (t1:extrainfo_gen -> term)
+  (t2:extrainfo_gen -> term)
+  : term :=
+  tLambda na (t1 e) (t2 (update_lambda_type_arg na e saveinfo)).
+
+
+Definition it_mktLambda (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix ctx e e0 t:=
+    match ctx with
+    | [] => t e0
+    | decl :: ctx' =>
+        let e' := update_lambda_type_arg decl.(decl_name) e saveinfo in
+        let e0 := update_lambda_f decl.(decl_name) e0 saveinfo in
+        tLambda decl.(decl_name) (type_rename_transformer e decl.(decl_type) )
+          (Ffix ctx' e' e0 t)
+  end in
+  Ffix ctx e e t.
+
+Definition it_kptLambda (saveinfo:option string) (ctx:context) (e:extrainfo_gen) (t: extrainfo_gen -> term) : term :=
+  let fix Ffix ctx e t:=
+    match ctx with
+    | [] => t e
+    | decl :: ctx' =>
+        kptLambda saveinfo decl.(decl_name) e (fun e => type_rename_transformer e decl.(decl_type))
+          (fun e => Ffix ctx' e t)
+  end in
+  Ffix ctx e t.
+

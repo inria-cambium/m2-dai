@@ -1,10 +1,18 @@
 Load generate_identity.
 
+(* Definition thisfile := $run (tmCurrentModPath tt).
+Inductive Fin: nat -> nat -> nat -> Set :=
+| fzero n : Fin n n n
+| fS n: Fin n n n -> Fin n n n
+.
+Definition inputf := ($run (tmQuoteInductive (thisfile, "Fin"))).
+Compute $unquote (GenerateIdentity_param (thisfile, "Fin") inputf). *)
 
 Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
    All2_nil : All2 A B R [] []
    | All2_cons : forall (x : A) (y : B) (l : list A) (l' : list B),
-                 R x y -> All2 A B R l l' -> All2 A B R (x :: l) (y :: l').
+                 R x y -> All2 A B R l l' -> All2 A B R (x :: l) (y :: l')
+.
 MetaCoq Run Derive Identity All2 as "id_all2".
 Print id_all2.
 

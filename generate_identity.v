@@ -24,6 +24,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
     let aux : extrainfo_gen -> Nat.t -> constructor_body -> (context * (extrainfo_gen -> term)) := fun e i b =>
       (b.(cstr_args),
        fun e =>
+
         let constructor_current := tConstruct the_inductive i Instance.empty in
         tApp
           constructor_current
@@ -65,7 +66,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     in
                     match t with
                     | tProd _ t1 t2 =>
-                      kptLambda the_name None e
+                      kptLambda None the_name e
                         (fun e => type_rename_transformer e t1)
                         (fun e =>
                           transformer t2 (tApp (lift u) [tRel 0]) n_id e)
@@ -87,17 +88,18 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
               in
               map_with_extrainfo_gen_arg auxarg b.(cstr_args) e)
             )
-          ))
+          )
+          )
     in
 
     {|
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        kpProd_or_LetIn (Some "params") params (initial_info) $
-          fun e => mkProd_or_LetIn (Some "indices") indices e $
+        it_kptProd (Some "params") (rev params) (initial_info) $
+          fun e => it_mktProd (Some "indices") (rev indices) e $
             fun e =>
-              kptProd0 None the_name e
+              kptProd None the_name e
                 (fun e => tApp
                   (tInd the_inductive Instance.empty)
                     (rels_of "params" e ++ rels_of "indices" e))
@@ -106,13 +108,13 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   (tInd the_inductive Instance.empty)
                     (rels_of "params" e ++ rels_of "indices" e))
         ;
-
+      (*params is in reverse order*)
       dbody :=
-        kpLambda_or_LetIn (Some "params") params (initial_info) $
-          fun e => mkLambda_or_LetIn (Some "indices") indices  e $
+        it_kptLambda (Some "params") (rev params) (initial_info) $
+          fun e => it_mktLambda (Some "indices") (rev indices) e $
             fun e =>
-              mktLambda the_name e
-                (fun e => tApp (tInd the_inductive Instance.empty)  (rels_of "params" e ++ rels_of "indices" e))
+              mktLambda None the_name e
+                (fun e => tApp (tInd the_inductive Instance.empty) (rels_of "params" e ++ rels_of "indices" e))
                 (fun e =>
                   fancy_tCase e
                     (fun _ => the_inductive)

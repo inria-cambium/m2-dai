@@ -3,7 +3,8 @@ Load BasePrelude.
 
 (* Print nat_ind. *)
 (*
-Check $quote (forall P : nat -> Prop,
+Check $quote (forall P : nat -> Prop, 
+
   P 0 -> (forall n : nat, P n -> P (S n)) -> forall n : nat, P n). *)
 
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
@@ -51,18 +52,18 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
             | tProd na t1 t2 =>
                 match t1 with
                 | tRel i =>
-                    kptProd0 (Some "args") na e
+                    kptProd (Some "args") na e
                       (fun e => type_rename_transformer e (tRel i))
                       (fun e => transformer_args e t2)
                 | tApp (tRel i) tl =>
                   match is_recursive_call_gen e i with
                   | Some j =>
-                    mktProd0 (Some "args") na e
+                    mktProd (Some "args") na e
                       (fun e =>
                         tApp (tInd the_inductive []) (map (type_rename_transformer e) tl)
                       )
                       (fun e =>
-                        kptProd0 None the_name e
+                        kptProd None the_name e
                           (fun e => tApp
                             (rel_of "P" e)
                             (let tl := n_tl tl (length params) in
@@ -71,11 +72,11 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                           )
                           (fun e => transformer_args e t2))
                   | None =>
-                    kptProd0 (Some "args") na e
+                    kptProd (Some "args") na e
                       (fun e => type_rename_transformer e t1)
                       (fun e => transformer_args e t2)
                   end
-                | _ => kptProd0 (Some "args") na e (fun e => type_rename_transformer e t1) (fun e => transformer_args e t2)
+                | _ => kptProd (Some "args") na e (fun e => type_rename_transformer e t1) (fun e => transformer_args e t2)
                 end
             | tApp (tRel i) tl =>
                 match is_recursive_call_gen e i with
@@ -98,17 +99,17 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         match b with
         | [] => t e
         | ctr :: l =>
-            mktProd0 None the_name e (fun e => auxctr e ctr i)
+            mktProd None the_name e (fun e => auxctr e ctr i)
               (fun e => Ffix e l t (i+1))
         end
       in
       Ffix e b t 0
     in
 
-    kpProd_or_LetIn (Some "params") params initial_info $
+    it_kptProd (Some "params") (rev params) initial_info $
       fun e =>
-        mktProd0 None prop_name e
-          (fun e => mkProd_or_LetIn (Some "indices") indices e $
+        mktProd None prop_name e
+          (fun e => it_mktProd (Some "indices") (rev indices) e $
              fun e => tProd the_name
                 (tApp (tInd the_inductive []) (rels_of "params" e ++ rels_of "indices" e))
                 (tSort sProp)
@@ -117,9 +118,9 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
           let e := mkinfo_gen e.(renaming_gen) ((information_list "args" [])::e.(info)) in
             aux e body.(ind_ctors)
               (fun e =>
-                mkProd_or_LetIn (Some "indices") indices e $
+                it_mktProd (Some "indices") (rev indices) e $
                   fun e =>
-                    mktProd0 None the_name e
+                    mktProd None the_name e
                       (fun e => tApp (tInd the_inductive []) (rels_of "params" e ++ rels_of "indices" e))
                       (fun e => tApp (rel_of "P" e) (rels_of "indices" e ++ [rel_of "x" e]))
             ))
