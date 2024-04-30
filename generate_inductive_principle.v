@@ -3,7 +3,7 @@ Load BasePrelude.
 
 (* Print nat_ind. *)
 (*
-Check $quote (forall P : nat -> Prop, 
+Check $quote (forall P : nat -> Prop,
 
   P 0 -> (forall n : nat, P n -> P (S n)) -> forall n : nat, P n). *)
 
@@ -13,7 +13,7 @@ Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 Definition the_name := {| binder_name := nNamed "x"; binder_relevance := Relevant |}.
 Definition prop_name := {| binder_name := nNamed "P"; binder_relevance := Relevant |}.
 
-Axiom print_context : extrainfo_gen -> forall {A}, A.
+Axiom print_context : extrainfo -> forall {A}, A.
 Axiom printi : nat -> forall {A}, A .
 
 Fixpoint n_tl {A} (l:list A) n :=
@@ -23,6 +23,7 @@ Fixpoint n_tl {A} (l:list A) n :=
   end
 .
 
+(*works for type with parameter/indice, not mutual inductive*)
 Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     let params := ty.(ind_params) in
     let initial_info := add_T empty_info ty.(ind_bodies) in
@@ -36,10 +37,9 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
     let indices := body.(ind_indices) in
 
-    let fix aux (e:extrainfo_gen) (b:list constructor_body) (t:extrainfo_gen -> term) :term :=
-      let fix Ffix e b (t:extrainfo_gen -> term) i :=
-        (* forall arg1 ... argk, P ind1 :*)
-        let auxctr (e:extrainfo_gen) (ctr:constructor_body) i : term :=
+    let fix aux (e:extrainfo) (b:list constructor_body) (t:extrainfo -> term) :term :=
+      let fix Ffix e b (t:extrainfo -> term) i :=
+        let auxctr (e:extrainfo) (ctr:constructor_body) i : term :=
           let constructor_current := tConstruct the_inductive i [] in
           let cstr_type := ctr.(cstr_type) in
           let cstr_type := (*get rid of the parameter types*)
@@ -76,7 +76,9 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                       (fun e => type_rename_transformer e t1)
                       (fun e => transformer_args e t2)
                   end
-                | _ => kptProd (Some "args") na e (fun e => type_rename_transformer e t1) (fun e => transformer_args e t2)
+                | _ => kptProd (Some "args") na e
+                        (fun e => type_rename_transformer e t1)
+                        (fun e => transformer_args e t2)
                 end
             | tApp (tRel i) tl =>
                 match is_recursive_call_gen e i with
@@ -84,12 +86,13 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                     tApp
                     (rel_of "P" e)
                     (let tl := n_tl tl (length params) in
-                      (map (type_rename_transformer e) tl) ++ [
-                        tApp constructor_current
-                          (rels_of "params" e ++ rels_of "args" e)
-                        ]
-                      )
-                | None => todo (*must an error*)
+                      (map (type_rename_transformer e) tl)
+                        ++
+                        [
+                          tApp constructor_current
+                            (rels_of "params" e ++ rels_of "args" e)
+                        ])
+                | None => todo (*must be an error*)
                 end
             | _ => t
             end
@@ -115,7 +118,6 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                 (tSort sProp)
             )
           (fun e =>
-          let e := mkinfo_gen e.(renaming_gen) ((information_list "args" [])::e.(info)) in
             aux e body.(ind_ctors)
               (fun e =>
                 it_mktProd (Some "indices") (rev indices) e $
@@ -125,10 +127,6 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                       (fun e => tApp (rel_of "P" e) (rels_of "indices" e ++ [rel_of "x" e]))
             ))
     .
-
-(* Compute (GenerateIndp (thisfile, "myvec") input_myvec). *)
-
-(* Definition thisfile := $run (tmCurrentModPath tt). *)
 
 
 Notation "'$let' x ':=' c1 'in' c2" := (@bind _ _ _ _ c1 (fun x => c2))

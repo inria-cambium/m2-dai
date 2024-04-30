@@ -21,3 +21,14 @@ Inductive myterm (A B:Type) : nat -> list A -> list B-> Type :=
   .
 MetaCoq Run Derive InductivePrinciple myterm as "indp_myterm".
 Print indp_myterm.
+
+
+(* Inductive Mybool := myt | myf.
+Print Mybool_ind.
+
+Inductive ntree (A:Set) : Set :=
+  nnode : A -> nforest A -> ntree A
+with nforest (A:Set) : Set :=
+  | nnil: nforest A
+  | ncons : ntree A -> nforest A -> nforest A.
+Print ntree_ind. *)

@@ -7,9 +7,14 @@ Definition the_name := {| binder_name := nNamed "x";
 
 
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
-Axiom print_context : extrainfo_gen -> forall {A}, A.
+Axiom print_context : extrainfo -> forall {A}, A.
 
-
+Definition add_id (e:extrainfo) : extrainfo :=
+  add_listinfo e "rels_of_id"
+    (mapi (fun i _ => mkdeclnat
+            {| binder_name:=nNamed "id"; binder_relevance:=Relevant|}
+            None i)
+      (lookup_list e.(info) "rels_of_T")).
 
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
@@ -21,7 +26,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
     let the_inductive := {| inductive_mind := na; inductive_ind := i |} in
     let indices := body.(ind_indices) in
 
-    let aux : extrainfo_gen -> Nat.t -> constructor_body -> (context * (extrainfo_gen -> term)) := fun e i b =>
+    let aux : extrainfo -> Nat.t -> constructor_body -> (context * (extrainfo -> term)) := fun e i b =>
       (b.(cstr_args),
        fun e =>
 
@@ -86,7 +91,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   (* arg_current *)
                 | _ => arg_current end
               in
-              map_with_extrainfo_gen_arg auxarg b.(cstr_args) e)
+              map_with_extrainfo_arg auxarg b.(cstr_args) e)
             )
           )
           )
