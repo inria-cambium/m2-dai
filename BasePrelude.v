@@ -1,6 +1,7 @@
-Load MetaCoqPrelude.
-Import MCMonadNotation.
-Import List.
+Require Export MetaCoqPrelude.
+Export MCMonadNotation.
+Export List.
+Export ListNotations.
 
 Axiom todo : forall {A}, A.
 

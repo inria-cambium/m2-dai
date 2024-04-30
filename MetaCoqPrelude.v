@@ -1,4 +1,4 @@
-From MetaCoq.Template Require Import All Checker Reduction.
+From MetaCoq.Template Require Export All Checker Reduction.
 
 Notation "'$quote' x" := ltac:((let p y := exact y in
                              quote_term

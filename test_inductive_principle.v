@@ -1,5 +1,5 @@
-Load generate_inductive_principle.
-
+Require Import generate_inductive_principle List.
+Import ListNotations.
 
 Inductive myvec (A:Type) : nat -> Type :=
  | myvnil : myvec A 0
@@ -21,6 +21,22 @@ Inductive myterm (A B:Type) : nat -> list A -> list B-> Type :=
   .
 MetaCoq Run Derive InductivePrinciple myterm as "indp_myterm".
 Print indp_myterm.
+
+Fail MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
+
+Inductive rtree : Type := T : list rtree -> rtree.
+
+Fail MetaCoq Run Derive InductivePrinciple rtree as "indp_rtree". (* should raise an error message *)
+
+Require Import MetaCoqPrelude.
+
+MetaCoq Run PrintInductivePrinciple Acc.
+
+Check $Quote (forall [A : Type] [R : A -> A -> Prop] (P : A -> Type),
+    (forall x : A, (forall y : A, R y x -> Acc R y) -> (forall y : A, R y x -> P y) -> P x) ->
+    forall x : A, Acc R x -> P x).
+
+(* MetaCoq Run Derive InductivePrinciple Acc as "Acc_nat". *)
 
 
 (* Inductive Mybool := myt | myf.

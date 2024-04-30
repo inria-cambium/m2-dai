@@ -1,4 +1,5 @@
-Load generate_identity.
+Require Import generate_identity List.
+Import ListNotations.
 
 (* Definition thisfile := $run (tmCurrentModPath tt).
 Inductive Fin: nat -> nat -> nat -> Set :=

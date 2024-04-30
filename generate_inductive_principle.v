@@ -1,4 +1,7 @@
-Load BasePrelude.
+Require Import BasePrelude.
+
+From MetaCoq Require Export bytestring.
+Global Open Scope bs.
 
 
 (* Print nat_ind. *)
@@ -158,4 +161,17 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
     end.
 
 Notation "'Derive' 'InductivePrinciple' a 'as' id" := (generate_indp a (Some id)) (at level 0).
+
+Definition print_indp {A} (a : A) : TemplateMonad unit :=
+  $let t := tmQuote a in
+    match t with
+    | (tInd ind u) =>
+        let kn := ind.(inductive_mind) in
+        $let mind := tmQuoteInductive kn in
+          let id := GenerateIndp kn mind in
+          tmEval cbv id >>= tmPrint
+    | _ => tmFail "no inductive"
+    end.
+
+Notation "'PrintInductivePrinciple' a" := (print_indp a) (at level 0).
 

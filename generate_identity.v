@@ -1,6 +1,7 @@
-Load BasePrelude.
+Require Import BasePrelude.
 
-
+From MetaCoq Require Export bytestring.
+Global Open Scope bs.
 
 Definition the_name := {| binder_name := nNamed "x";
                   binder_relevance := Relevant  |}.

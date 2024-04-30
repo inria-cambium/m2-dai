@@ -1,0 +1,8 @@
+-Q . ""
+
+BasePrelude.v
+MetaCoqPrelude.v
+generate_identity.v
+generate_inductive_principle.v
+test_identity.v
+test_inductive_principle.v
