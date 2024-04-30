@@ -1,5 +1,6 @@
 Require Import generate_identity List.
 Import ListNotations.
+Import bytestring.
 
 (* Definition thisfile := $run (tmCurrentModPath tt).
 Inductive Fin: nat -> nat -> nat -> Set :=

@@ -87,16 +87,17 @@ Definition empty_info := {|
 Definition add_listinfo e na l :=
   mkinfo e.(renaming) ((information_list na l)::e.(info)).
 
-Definition add_T (e:extrainfo) ind_bodies : extrainfo :=
-  let ind_names := map (
-    fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
-                        binder_relevance := Relevant  |}
-    ) ind_bodies in
-  let l:= mapi (fun i x => mkdeclnat x None i) ind_names in
-  add_listinfo e "rels_of_T" l.
+Definition add_info_names (e:extrainfo) (str:string) names : extrainfo :=
+  let l:= mapi (fun i x => mkdeclnat x None i) names in
+  add_listinfo e str l.
 
-(*for lambda term appear in the type definition*)
-Definition update_kp (na:aname) (e:extrainfo) (saveinfo:option string):=
+
+Inductive saveinfo:=
+  | Savelist (s:string)
+  | Saveitem (s:string)
+  | NoSave.
+
+Definition update_kp (na:aname) (e:extrainfo) (saveinfo:saveinfo):=
   let item := mkdeclnat na None 0 in
   let renaming :=
     item :: (plus_one_index e.(renaming))
@@ -110,35 +111,26 @@ Definition update_kp (na:aname) (e:extrainfo) (saveinfo:option string):=
   in
   (* mkinfo renaming info *)
   match saveinfo with
-  | None => mkinfo renaming info
-  | Some str =>
-      mkinfo renaming
-        (replace_add_info info str item)
+  | NoSave => mkinfo renaming info
+  | Saveitem str => mkinfo renaming ((information_nat str 0) ::info)
+  | Savelist str => mkinfo renaming (replace_add_info info str item)
   end
   .
 
-(*for lambda term only appear in the function generated*)
-Definition update_mk na (e:extrainfo) (saveinfo:option string) : extrainfo :=
-  let renaming := e.(renaming) in
-  let info := e.(info) in
-  let info_new := map (
+Definition update_mk na (e:extrainfo) (saveinfo:saveinfo) : extrainfo :=
+  let info := map (
     fun x => match x with
     | information_list na l =>
         if String.eqb na "rels_of_T" then x else
         information_list na (plus_one_index l)
     | information_nat na n => information_nat na (1 + n) end
-  ) info in
-  let renaming_new := plus_one_index renaming in
+  ) e.(info) in
+  let renaming := plus_one_index e.(renaming) in
+  let item := mkdeclnat na None 0 in
   match saveinfo with
-  | None =>
-      let name := match na.(binder_name) with
-        | nAnon => "newvar"
-        | nNamed s => s end
-      in
-      mkinfo renaming_new ((information_nat name 0) :: info_new)
-  | Some str =>
-      mkinfo renaming_new
-        (replace_add_info info_new str (mkdeclnat na None 0))
+  | NoSave => mkinfo renaming info
+  | Saveitem str => mkinfo renaming ((information_nat str 0)::info)
+  | Savelist str => mkinfo renaming (replace_add_info info str item)
   end.
 
 (*only used in tCase*)
@@ -220,11 +212,13 @@ Definition map_with_extrainfo_arg {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
   in
   Ffix f l e.
 
-Axiom print_info: extrainfo -> forall {A}, A .
-
 Definition geti_gen (e:extrainfo) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
-  tRel (nth i l (print_info e)).
+  tRel (nth i l todo).
+
+Definition geti_info (na:string) (e:extrainfo) (i:nat) :=
+  let l := lookup_list e.(info) na in
+  tRel (nth i l todo).(decl_type).
 
 Definition get_id_gen (e:extrainfo) (i:nat) :=
   let l := lookup_list e.(info) "rels_of_id" in
@@ -253,7 +247,7 @@ Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
     match t with
     | tRel k => geti_gen e k
     | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
-    | tLambda name t1 t2 =>(*tProd ?*) tLambda name (Ffix e t1) (Ffix (update_kp name e None) t2)
+    | tLambda name t1 t2 => tLambda name (Ffix e t1) (Ffix (update_kp name e NoSave) t2)
     | _ => t (* todo *)
   end in
   Ffix e t.
@@ -275,31 +269,32 @@ Definition check_return_type (t:term) (e:extrainfo) : option nat :=
       let types := map decl_type types in
       findi i types
     | tApp t _ => Ffix t e
-    | tProd name _  t2 => Ffix t2 (update_kp name e None)
+    | tProd name _  t2 => Ffix t2 (update_kp name e NoSave)
     | _ => None
     end in
   Ffix t e.
 
 
-Definition mktProd (saveinfo:option string) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
+Definition mktProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
   let e' := update_mk na e saveinfo in
   tProd na (t1 e) (t2 e').
 
-Definition kptProd (saveinfo:option string) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
+Definition kptProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
   let e' := update_kp na e saveinfo in
   tProd na (t1 e) (t2 e').
 
-Definition it_kptProd (saveinfo:option string) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
+Definition it_kptProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e t:=
     match ctx with
     | [] => t e
     | decl :: ctx' =>
-        kptProd saveinfo decl.(decl_name) e (fun e => type_rename_transformer e decl.(decl_type))
+        kptProd saveinfo decl.(decl_name) e
+          (fun e => type_rename_transformer e decl.(decl_type))
           (fun e => Ffix ctx' e t)
   end in
   Ffix ctx e t.
 
-Definition it_mktProd (saveinfo:option string) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
+Definition it_mktProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e e0 t:=
     match ctx with
     | [] => t e0
@@ -322,7 +317,7 @@ Definition kptLambda saveinfo na (e:extrainfo) (t1:extrainfo -> term)
   tLambda na (t1 e) (t2 (update_kp na e saveinfo)).
 
 
-Definition it_mktLambda (saveinfo:option string) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
+Definition it_mktLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e e0 t:=
     match ctx with
     | [] => t e0
@@ -334,7 +329,7 @@ Definition it_mktLambda (saveinfo:option string) (ctx:context) (e:extrainfo) (t:
   end in
   Ffix ctx e e t.
 
-Definition it_kptLambda (saveinfo:option string) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
+Definition it_kptLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e t:=
     match ctx with
     | [] => t e
@@ -344,3 +339,4 @@ Definition it_kptLambda (saveinfo:option string) (ctx:context) (e:extrainfo) (t:
   end in
   Ffix ctx e t.
 
+Axiom print_info: extrainfo -> forall {A}, A.

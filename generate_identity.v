@@ -1,26 +1,30 @@
 Require Import BasePrelude.
 
-From MetaCoq Require Export bytestring.
+(* From MetaCoq Require Export bytestring. *)
 Global Open Scope bs.
 
 Definition the_name := {| binder_name := nNamed "x";
                   binder_relevance := Relevant  |}.
 
-
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
-Axiom print_context : extrainfo -> forall {A}, A.
 
-Definition add_id (e:extrainfo) : extrainfo :=
-  add_listinfo e "rels_of_id"
-    (mapi (fun i _ => mkdeclnat
-            {| binder_name:=nNamed "id"; binder_relevance:=Relevant|}
-            None i)
-      (lookup_list e.(info) "rels_of_T")).
 
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
   let params := ty.(ind_params) in
-  let initial_info := add_id $ add_T empty_info ty.(ind_bodies) in
+  let n_ind := length ty.(ind_bodies) in
+  let initial_info :=
+    let e :=
+      add_info_names empty_info "rels_of_T"
+        (map (fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
+                            binder_relevance := Relevant  |}
+              ) ty.(ind_bodies))
+    in
+    add_info_names e "rels_of_id"
+      (map (fun ind_body => {| binder_name := nNamed "id";
+                          binder_relevance := Relevant  |}
+            ) ty.(ind_bodies))
+  in
 
   let generate_inductive (i:Datatypes.nat) (body: one_inductive_body) :=
 
@@ -72,7 +76,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     in
                     match t with
                     | tProd _ t1 t2 =>
-                      kptLambda None the_name e
+                      kptLambda NoSave the_name e
                         (fun e => type_rename_transformer e t1)
                         (fun e =>
                           transformer t2 (tApp (lift u) [tRel 0]) n_id e)
@@ -102,10 +106,10 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        it_kptProd (Some "params") (rev params) (initial_info) $
-          fun e => it_mktProd (Some "indices") (rev indices) e $
+        it_kptProd (Savelist "params") (rev params) (initial_info) $
+          fun e => it_mktProd (Savelist "indices") (rev indices) e $
             fun e =>
-              kptProd None the_name e
+              kptProd NoSave the_name e
                 (fun e => tApp
                   (tInd the_inductive Instance.empty)
                     (rels_of "params" e ++ rels_of "indices" e))
@@ -116,10 +120,10 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         ;
       (*params is in reverse order*)
       dbody :=
-        it_kptLambda (Some "params") (rev params) (initial_info) $
-          fun e => it_mktLambda (Some "indices") (rev indices) e $
+        it_kptLambda (Savelist "params") (rev params) (initial_info) $
+          fun e => it_mktLambda (Savelist "indices") (rev indices) e $
             fun e =>
-              mktLambda None the_name e
+              mktLambda (Saveitem "x") the_name e
                 (fun e => tApp (tInd the_inductive Instance.empty) (rels_of "params" e ++ rels_of "indices" e))
                 (fun e =>
                   fancy_tCase e

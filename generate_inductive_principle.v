@@ -1,6 +1,6 @@
 Require Import BasePrelude.
 
-From MetaCoq Require Export bytestring.
+(* From MetaCoq Require Export bytestring. *)
 Global Open Scope bs.
 
 
@@ -16,8 +16,8 @@ Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 Definition the_name := {| binder_name := nNamed "x"; binder_relevance := Relevant |}.
 Definition prop_name := {| binder_name := nNamed "P"; binder_relevance := Relevant |}.
 
-Axiom print_context : extrainfo -> forall {A}, A.
-Axiom printi : nat -> forall {A}, A .
+(* Axiom print_context : extrainfo -> forall {A}, A.
+Axiom printi : nat -> forall {A}, A . *)
 
 Fixpoint n_tl {A} (l:list A) n :=
   match n with
@@ -29,7 +29,12 @@ Fixpoint n_tl {A} (l:list A) n :=
 (*works for type with parameter/indice, not mutual inductive*)
 Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     let params := ty.(ind_params) in
-    let initial_info := add_T empty_info ty.(ind_bodies) in
+    let initial_info :=
+      add_info_names empty_info "rels_of_T"
+        (map (fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
+                            binder_relevance := Relevant  |}
+              ) ty.(ind_bodies))
+    in
     (* suppose single inductive body*)
     let body :=
       match ty.(ind_bodies) with
@@ -40,7 +45,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
     let indices := body.(ind_indices) in
 
-    let fix aux (e:extrainfo) (b:list constructor_body) (t:extrainfo -> term) :term :=
+    let aux (e:extrainfo) (b:list constructor_body) (t:extrainfo -> term) :term :=
       let fix Ffix e b (t:extrainfo -> term) i :=
         let auxctr (e:extrainfo) (ctr:constructor_body) i : term :=
           let constructor_current := tConstruct the_inductive i [] in
@@ -55,18 +60,18 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
             | tProd na t1 t2 =>
                 match t1 with
                 | tRel i =>
-                    kptProd (Some "args") na e
+                    kptProd (Savelist "args") na e
                       (fun e => type_rename_transformer e (tRel i))
                       (fun e => transformer_args e t2)
                 | tApp (tRel i) tl =>
                   match is_recursive_call_gen e i with
-                  | Some j =>
-                    mktProd (Some "args") na e
+                  | Some _ =>
+                    mktProd (Savelist "args") na e
                       (fun e =>
                         tApp (tInd the_inductive []) (map (type_rename_transformer e) tl)
                       )
                       (fun e =>
-                        kptProd None the_name e
+                        kptProd NoSave the_name e
                           (fun e => tApp
                             (rel_of "P" e)
                             (let tl := n_tl tl (length params) in
@@ -75,17 +80,17 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                           )
                           (fun e => transformer_args e t2))
                   | None =>
-                    kptProd (Some "args") na e
+                    kptProd (Savelist "args") na e
                       (fun e => type_rename_transformer e t1)
                       (fun e => transformer_args e t2)
                   end
-                | _ => kptProd (Some "args") na e
+                | _ => kptProd (Savelist "args") na e
                         (fun e => type_rename_transformer e t1)
                         (fun e => transformer_args e t2)
                 end
             | tApp (tRel i) tl =>
                 match is_recursive_call_gen e i with
-                | Some kk =>
+                | Some _ =>
                     tApp
                     (rel_of "P" e)
                     (let tl := n_tl tl (length params) in
@@ -105,17 +110,17 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         match b with
         | [] => t e
         | ctr :: l =>
-            mktProd None the_name e (fun e => auxctr e ctr i)
+            mktProd NoSave the_name e (fun e => auxctr e ctr i)
               (fun e => Ffix e l t (i+1))
         end
       in
       Ffix e b t 0
     in
 
-    it_kptProd (Some "params") (rev params) initial_info $
+    it_kptProd (Savelist "params") (rev params) initial_info $
       fun e =>
-        mktProd None prop_name e
-          (fun e => it_mktProd (Some "indices") (rev indices) e $
+        mktProd (Saveitem "P") prop_name e
+          (fun e => it_mktProd (Savelist "indices") (rev indices) e $
              fun e => tProd the_name
                 (tApp (tInd the_inductive []) (rels_of "params" e ++ rels_of "indices" e))
                 (tSort sProp)
@@ -123,13 +128,138 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
           (fun e =>
             aux e body.(ind_ctors)
               (fun e =>
-                it_mktProd (Some "indices") (rev indices) e $
+                it_mktProd (Savelist "indices") (rev indices) e $
                   fun e =>
-                    mktProd None the_name e
+                    mktProd (Saveitem "x") the_name e
                       (fun e => tApp (tInd the_inductive []) (rels_of "params" e ++ rels_of "indices" e))
                       (fun e => tApp (rel_of "P" e) (rels_of "indices" e ++ [rel_of "x" e]))
             ))
     .
+
+
+Fixpoint fold_right_i_aux {A B : Type} (f : B -> nat -> A -> A) i (l:list B) (a0 : A) :=
+  match l with
+  | [] => a0
+  | b :: l' => f b i (fold_right_i_aux f (S i) l' a0 )
+  end.
+
+Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body) : term :=
+    let params := ty.(ind_params) in
+    let initial_info :=
+      add_info_names empty_info "rels_of_T"
+        (map (fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
+                            binder_relevance := Relevant  |}
+              ) ty.(ind_bodies))
+    in
+    let bodies := ty.(ind_bodies) in
+    let n_ind := length ty.(ind_bodies) in
+
+
+    let aux (e:extrainfo) (b:list constructor_body) (j:nat) (t:extrainfo -> term) :term :=
+      let the_inductive := {| inductive_mind := kername; inductive_ind := j |} in
+      let fix Ffix e b (t:extrainfo -> term) i :=
+        let auxctr (e:extrainfo) (ctr:constructor_body) i : term :=
+          let constructor_current := tConstruct the_inductive i [] in
+          let cstr_type := ctr.(cstr_type) in
+          let cstr_type := (*get rid of the parameter types*)
+            fold_left (
+              fun x _ => match x with tProd _ _ t => t | _ => todo end
+            ) params cstr_type
+          in
+          let fix transformer_args e t: term :=
+            match t with
+            | tProd na t1 t2 =>
+                match t1 with
+                | tRel i =>
+                    kptProd (Savelist "args") na e
+                      (fun e => type_rename_transformer e (tRel i))
+                      (fun e => transformer_args e t2)
+                | tApp (tRel i) tl =>
+                  match is_recursive_call_gen e i with
+                  | Some kk =>
+                    mktProd (Savelist "args") na e
+                      (fun e =>
+                        tApp
+                          (tInd {| inductive_mind := kername; inductive_ind := (*todo*) n_ind -1 - kk |} [])
+                          (map (type_rename_transformer e) tl)
+                      )
+                      (fun e =>
+                        kptProd NoSave the_name e
+                          (fun e => tApp
+                            (geti_info "P" e kk)
+                            (let tl := n_tl tl (length params) in
+                              (map (type_rename_transformer e) tl) ++ [tRel 0]
+                              )
+                          )
+                          (fun e => transformer_args e t2))
+                  | None =>
+                    kptProd (Savelist "args") na e
+                      (fun e => type_rename_transformer e t1)
+                      (fun e => transformer_args e t2)
+                  end
+                | _ => kptProd (Savelist "args") na e
+                        (fun e => type_rename_transformer e t1)
+                        (fun e => transformer_args e t2)
+                end
+            | tApp (tRel i) tl =>
+                match is_recursive_call_gen e i with
+                | Some kk =>
+                    tApp
+                    (geti_info "P" e kk)
+                    (let tl := n_tl tl (length params) in
+                      (map (type_rename_transformer e) tl)
+                        ++
+                        [
+                          tApp constructor_current
+                            (rels_of "params" e ++ rels_of "args" e)
+                        ])
+                | None => todo (*must be an error*)
+                end
+            | _ => t
+            end
+          in
+          transformer_args e cstr_type
+        in
+        match b with
+        | [] => t e
+        | ctr :: l =>
+            mktProd NoSave the_name e (fun e => auxctr e ctr i)
+              (fun e => Ffix e l t (i+1))
+        end
+      in
+      Ffix e b t 0
+    in
+    let mainbody := hd todo bodies in
+    let indices_main := mainbody.(ind_indices) in
+    let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
+
+    it_kptProd (Savelist "params") (rev params) initial_info $
+      fold_right_i_aux (
+        fun body i t => fun e =>
+          let the_inductive := {| inductive_mind := kername; inductive_ind :=i |} in
+          let indices := body.(ind_indices) in
+          mktProd (Savelist "P") prop_name e
+            (fun e => it_mktProd (Savelist "indices") (rev indices) e $
+              fun e => tProd the_name
+                (tApp (tInd the_inductive []) (rels_of "params" e ++ rels_of "indices" e))
+                (tSort sProp)
+            ) t
+      ) 0 bodies
+        (fold_right_i_aux
+          (fun body i t => fun e => aux e body.(ind_ctors) i t)
+          0 bodies
+          (fun e =>
+            it_mktProd (Savelist "indices") (rev indices_main) e $
+              fun e =>
+                mktProd (Saveitem "x") the_name e
+                  (fun e => tApp (tInd the_inductive_main []) (rels_of "params" e ++ rels_of "indices" e))
+                  (fun e => tApp (geti_info "P" e (n_ind - 1 (*todo*))) (rels_of "indices" e ++ [rel_of "x" e])))
+        )
+    .
+
+
+
+
 
 
 Notation "'$let' x ':=' c1 'in' c2" := (@bind _ _ _ _ c1 (fun x => c2))
@@ -150,7 +280,7 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
     | (tInd ind u) =>
       let kn := ind.(inductive_mind) in
       $let mind := tmQuoteInductive kn in
-      let id := GenerateIndp kn mind in
+      let id := GenerateIndp_mutual kn mind in
       $let u := tmUnquote id in
       $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
         match out with
