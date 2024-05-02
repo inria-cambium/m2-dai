@@ -3,6 +3,10 @@ Import ListNotations.
 Import bytestring.
 
 
+MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
+Print indp_nat.
+
+
 Inductive myvec (A:Type) : nat -> Type :=
  | myvnil : myvec A 0
  | myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
@@ -47,18 +51,12 @@ MetaCoq Run Derive InductivePrinciple All2 as "indp_all2".
 Print indp_all2.
 
 
-Fail MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
-
 Inductive rtree : Type := T : list rtree -> rtree.
+MetaCoq Run Derive InductivePrinciple rtree as "indp_rtree". (* should raise an error message *)
+Print indp_rtree.
 
-Fail MetaCoq Run Derive InductivePrinciple rtree as "indp_rtree". (* should raise an error message *)
 
 Require Import MetaCoqPrelude.
 
-MetaCoq Run PrintInductivePrinciple Acc.
+(* MetaCoq Run PrintInductivePrinciple Acc. *)
 
-(* Check $Quote (forall [A : Type] [R : A -> A -> Prop] (P : A -> Type),
-    (forall x : A, (forall y : A, R y x -> Acc R y) -> (forall y : A, R y x -> P y) -> P x) ->
-    forall x : A, Acc R x -> P x). *)
-
-(* MetaCoq Run Derive InductivePrinciple Acc as "Acc_nat". *)
