@@ -49,7 +49,7 @@ Definition lookup_item (l : list information) (na : string) : nat :=
   | _ => todo
   end.
 
-Fixpoint replace_info (info:list information) (na:string)  (l : list (BasicAst.context_decl nat)) :=
+(* Fixpoint replace_info (info:list information) (na:string)  (l : list (BasicAst.context_decl nat)) :=
   match info with
   | (information_list s l0) :: info' =>
       if String.eqb s na then (information_list na l) :: info'
@@ -57,7 +57,7 @@ Fixpoint replace_info (info:list information) (na:string)  (l : list (BasicAst.c
   | h :: info' => h :: (replace_info info' na l)
   | [] => (information_list na l) :: []
   (* (information_list na l) :: [] *)
-  end.
+  end. *)
 
 Fixpoint replace_add_info (info:list information) (na:string) (item : BasicAst.context_decl nat) :=
   match info with
@@ -74,23 +74,28 @@ Record extrainfo : Type := mkinfo {
   renaming : list (BasicAst.context_decl nat);
 
   info : list information ;
+  kn : kername;
 }.
 
-Definition empty_info := {|
+(* Definition empty_info := {|
   renaming := [];
-  info := [
-    (* information_list "params" [];
-    information_list "indices" [] *)
-  ]
-|}.
+  info := []
+|}. *)
 
-Definition add_listinfo e na l :=
-  mkinfo e.(renaming) ((information_list na l)::e.(info)).
+Definition add_listinfo e na l :extrainfo :=
+  mkinfo e.(renaming) ((information_list na l)::e.(info)) e.(kn).
 
 Definition add_info_names (e:extrainfo) (str:string) names : extrainfo :=
   let l:= mapi (fun i x => mkdeclnat x None i) names in
   add_listinfo e str l.
 
+
+Definition make_initial_info kn ty :extrainfo :=
+  let e := mkinfo [] [] kn in
+  add_info_names e "rels_of_T"
+    (map (fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
+                        binder_relevance := Relevant  |}
+          ) ty.(ind_bodies)).
 
 Inductive saveinfo:=
   | Savelist (s:string)
@@ -111,9 +116,9 @@ Definition update_kp (na:aname) (e:extrainfo) (saveinfo:saveinfo):=
   in
   (* mkinfo renaming info *)
   match saveinfo with
-  | NoSave => mkinfo renaming info
-  | Saveitem str => mkinfo renaming ((information_nat str 0) ::info)
-  | Savelist str => mkinfo renaming (replace_add_info info str item)
+  | NoSave => mkinfo renaming info e.(kn)
+  | Saveitem str => mkinfo renaming ((information_nat str 0) ::info) e.(kn)
+  | Savelist str => mkinfo renaming (replace_add_info info str item) e.(kn)
   end
   .
 
@@ -128,9 +133,9 @@ Definition update_mk na (e:extrainfo) (saveinfo:saveinfo) : extrainfo :=
   let renaming := plus_one_index e.(renaming) in
   let item := mkdeclnat na None 0 in
   match saveinfo with
-  | NoSave => mkinfo renaming info
-  | Saveitem str => mkinfo renaming ((information_nat str 0)::info)
-  | Savelist str => mkinfo renaming (replace_add_info info str item)
+  | NoSave => mkinfo renaming info e.(kn)
+  | Saveitem str => mkinfo renaming ((information_nat str 0)::info) e.(kn)
+  | Savelist str => mkinfo renaming (replace_add_info info str item) e.(kn)
   end.
 
 (*only used in tCase*)
@@ -149,7 +154,7 @@ Definition add_args (e:extrainfo) (ctx: context): extrainfo :=
     | information_nat na n => information_nat na (n + nargs) end
     ) e.(info) in
   let arg := information_nat "arg_current" 0 in
-  mkinfo (renaming) (arg:: info_new).
+  mkinfo (renaming) (arg:: info_new) e.(kn).
 
 Definition fancy_tCase (e:extrainfo) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo -> list (context * (extrainfo -> term))):term :=
   let pcontext := t5 e in
@@ -167,7 +172,7 @@ Definition fancy_tCase (e:extrainfo) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo -> list 
     let l:= mapi (fun i x => mkdeclnat x None (i+1)) (tl pcontext) in
     let renaming_new := plus_k_index renaming (length pcontext) in
     let info_new := (information_list "pcontext_indices" l) :: info_new in
-    mkinfo renaming_new info_new
+    mkinfo renaming_new info_new e.(kn)
   in
   tCase
     {|
@@ -199,7 +204,7 @@ Definition update_ctr_arg_back (e:extrainfo) : extrainfo :=
         if String.eqb "arg_current" na then information_nat na (n + 1)
         else x end
   ) e.(info) in
-  mkinfo (tl e.(renaming)) info_new
+  mkinfo (tl e.(renaming)) info_new e.(kn)
 .
 
 Definition map_with_extrainfo_arg {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
@@ -212,7 +217,7 @@ Definition map_with_extrainfo_arg {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
   in
   Ffix f l e.
 
-Definition geti_gen (e:extrainfo) (i:nat) :=
+Definition geti_rename (e:extrainfo) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
   tRel (nth i l todo).
 
@@ -220,9 +225,9 @@ Definition geti_info (na:string) (e:extrainfo) (i:nat) :=
   let l := lookup_list e.(info) na in
   tRel (nth i l todo).(decl_type).
 
-Definition get_id_gen (e:extrainfo) (i:nat) :=
+(* Definition get_id_gen (e:extrainfo) (i:nat) :=
   let l := lookup_list e.(info) "rels_of_id" in
-  tRel (nth i l todo).(decl_type).
+  tRel (nth i l todo).(decl_type). *)
 
 Definition rels_of (na:string) (e:extrainfo) :=
   let l := lookup_list e.(info) na in
@@ -245,7 +250,11 @@ Definition is_recursive_call_gen (e:extrainfo) i : option nat:=
 Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
   let fix Ffix e t :=
     match t with
-    | tRel k => geti_gen e k
+    | tRel k =>
+      match is_recursive_call_gen e k with
+      | Some i => tInd {| inductive_mind :=e.(kn); inductive_ind := i |} []
+      | None => geti_rename e k
+      end
     | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
     | tLambda name t1 t2 => tLambda name (Ffix e t1) (Ffix (update_kp name e NoSave) t2)
     | _ => t (* todo *)

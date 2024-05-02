@@ -13,13 +13,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 
   let params := ty.(ind_params) in
   let n_ind := length ty.(ind_bodies) in
-  let initial_info :=
-    let e :=
-      add_info_names empty_info "rels_of_T"
-        (map (fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
-                            binder_relevance := Relevant  |}
-              ) ty.(ind_bodies))
-    in
+  let initial_info : extrainfo :=
+    let e := make_initial_info na ty in
     add_info_names e "rels_of_id"
       (map (fun ind_body => {| binder_name := nNamed "id";
                           binder_relevance := Relevant  |}
@@ -53,7 +48,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   | Some kk =>
                     tApp
                       (*recursive call of the identity function*) (*id_vec*)
-                      (get_id_gen e kk)
+                      (geti_info "rels_of_id" e kk)
                       ( (*the parameter/indice of the identity function*) (*X n*)
                         (map (type_rename_transformer e) tl)
                         (*the last argument*) (*v*)
@@ -62,7 +57,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 | tRel j =>
                   match is_recursive_call_gen e j with
                   | None => arg_current
-                  | Some kk => tApp (get_id_gen e kk) [arg_current]
+                  | Some kk => tApp (geti_info "rels_of_id" e kk) [arg_current]
                   end
                 | tProd _ _ _ =>
                   (***********)
@@ -81,10 +76,10 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                         (fun e =>
                           transformer t2 (tApp (lift u) [tRel 0]) n_id e)
                     | tApp (tRel _) tl =>
-                        tApp (get_id_gen e n_id)
+                        tApp (geti_info "rels_of_id" e n_id)
                           ((map (type_rename_transformer e) tl)
                             ++ [u])
-                    | tRel _ => tApp (get_id_gen e n_id) [u]
+                    | tRel _ => tApp (geti_info "rels_of_id" e n_id) [u]
                     | _ => todo (* other cases exist? *)
                     end in
                   match check_return_type arg.(decl_type) e with
