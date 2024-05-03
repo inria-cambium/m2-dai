@@ -6,7 +6,6 @@ Import bytestring.
 MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
 Print indp_nat.
 
-
 Inductive myvec (A:Type) : nat -> Type :=
  | myvnil : myvec A 0
  | myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
@@ -32,7 +31,6 @@ Inductive myterm (A B:Type) : nat -> list A -> list B-> Type :=
 MetaCoq Run Derive InductivePrinciple myterm as "indp_myterm".
 Print indp_myterm.
 
-
 Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
    All2_nil : All2 A B R [] []
    | All2_cons : forall (x : A) (y : B) (l : list A) (l' : list B),
@@ -42,24 +40,30 @@ MetaCoq Run Derive InductivePrinciple All2 as "indp_all2".
 Print indp_all2.
 
 (* le defined with two indices *)
-Inductive le : nat -> nat -> Prop :=
+Inductive le: nat -> nat -> Type :=
 | le_refl n : le n n
-| le_S n m : le (S n) m -> le n m. 
-
+| le_S n m : le (S n) m -> le n m.
 MetaCoq Run Derive InductivePrinciple le as "indp_le".
 Print indp_le.
 
 (* le defined with one non-uniform parameter and one index *)
-Inductive le' (n : nat) : nat -> Prop :=
-| le_refl' : le' n n
-| le_S' m : le' (S n) m -> le' n m. 
+Inductive le' (A B:Type) (n : nat): nat -> Type :=
+| le_refl' : le' A B n  n
+| le_S' m : le' A B (S n)   m -> le' A B n  m.
+(*
+forall P : forall n n0 : nat, le' n n0 -> Prop,
+       (forall n : nat, P n n (le_refl' n)) ->
+       (forall (n m : nat) (l : le' (S n) m),
+        P (S n) m l -> P n m (le_S' n m l)) ->
+       forall (n n0 : nat) (l : le' n n0), P n n0 l
+*)
+MetaCoq Run Derive InductivePrinciple le' as "indp_le'".
+Print indp_le'.
 
-Fail MetaCoq Run Derive InductivePrinciple le' as "indp_le'".
 
 Inductive rtree : Type := T : list rtree -> rtree.
 MetaCoq Run Derive InductivePrinciple rtree as "indp_rtree". (* should raise an error message *)
 Print indp_rtree.
-
 
 
 Inductive ntree (A:Set) : Set :=
