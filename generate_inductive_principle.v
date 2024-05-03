@@ -152,7 +152,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         | ctr :: l =>
             mktProd NoSave the_name e
               (fun e =>
-                it_kptProd (Savelist "no_uniform_params") no_uniform_params e $
+                it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
                  fun e => auxctr e ctr i)
               (fun e => Ffix e l t (i+1))
         end
@@ -330,7 +330,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
         | ctr :: l =>
             mktProd NoSave the_name e
             (fun e =>
-              it_kptProd (Savelist "no_uniform_params") no_uniform_params e $
+              it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
               fun e => auxctr e ctr i)
             (fun e => Ffix e l t (i+1))
         end

@@ -47,9 +47,9 @@ MetaCoq Run Derive InductivePrinciple le as "indp_le".
 Print indp_le.
 
 (* le defined with one non-uniform parameter and one index *)
-Inductive le' (A B:Type) (n : nat): nat -> Type :=
-| le_refl' : le' A B n  n
-| le_S' m : le' A B (S n)   m -> le' A B n  m.
+Inductive le' (n: nat): nat -> Type :=
+| le_refl' : le' n n
+| le_S' m : le' (S n) m -> le' n m.
 (*
 forall P : forall n n0 : nat, le' n n0 -> Prop,
        (forall n : nat, P n n (le_refl' n)) ->
