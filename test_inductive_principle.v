@@ -41,6 +41,20 @@ Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
 MetaCoq Run Derive InductivePrinciple All2 as "indp_all2".
 Print indp_all2.
 
+(* le defined with two indices *)
+Inductive le : nat -> nat -> Prop :=
+| le_refl n : le n n
+| le_S n m : le (S n) m -> le n m. 
+
+MetaCoq Run Derive InductivePrinciple le as "indp_le".
+Print indp_le.
+
+(* le defined with one non-uniform parameter and one index *)
+Inductive le' (n : nat) : nat -> Prop :=
+| le_refl' : le' n n
+| le_S' m : le' (S n) m -> le' n m. 
+
+Fail MetaCoq Run Derive InductivePrinciple le' as "indp_le'".
 
 Inductive rtree : Type := T : list rtree -> rtree.
 MetaCoq Run Derive InductivePrinciple rtree as "indp_rtree". (* should raise an error message *)

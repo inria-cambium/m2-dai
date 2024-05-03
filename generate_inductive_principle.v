@@ -350,7 +350,7 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
       $let u := tmUnquote id in
       $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
         match out with
-        | Some name => tmDefinitionRed name (Some hnf) r ;; ret tt
+        | Some name => tmDefinitionRed name (Some hnf) r ;; tmPrint r ;; ret tt
         | None => tmPrint r
         end
     | _ => tmFail "no inductive"
