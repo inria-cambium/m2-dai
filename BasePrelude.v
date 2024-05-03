@@ -359,3 +359,24 @@ Definition it_kptLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extr
   Ffix ctx e t.
 
 Axiom print_info: extrainfo -> forall {A}, A.
+
+
+(*If just need to get information from the source type definition
+  no need to generate term, use functions below
+*)
+
+Definition kptProd_util {Y:Type}
+  (saveinfo:saveinfo) na e (t1:extrainfo -> Y -> Y) (acc:extrainfo -> Y) :=
+  let e' := update_kp na e saveinfo in
+  (t1 e) (acc e').
+
+Definition it_kptProd_util {Y:Type}
+  (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t0:extrainfo -> Y -> Y) (acc: extrainfo -> Y) :Y :=
+  let fix Ffix ctx e acc:=
+    match ctx with
+    | [] => acc e
+    | decl :: ctx' =>
+        kptProd_util saveinfo decl.(decl_name) e t0
+          (fun e => Ffix ctx' e acc)
+  end in
+  Ffix ctx e acc.

@@ -3,6 +3,7 @@
 BasePrelude.v
 MetaCoqPrelude.v
 generate_identity.v
+param_checker.v
 generate_inductive_principle.v
 test_identity.v
 test_inductive_principle.v
