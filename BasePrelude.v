@@ -5,27 +5,17 @@ Export ListNotations.
 
 Axiom todo : forall {A}, A.
 
-Fixpoint listmake {X:Type} (x:X) (n:Datatypes.nat) :=
-  match n with
-  | Datatypes.O => []
-  | Datatypes.S n => cons x (listmake x n) end.
+Local Definition mkdeclnat a b (n:nat) := mkdecl a b n.
 
-Definition mkdeclnat a b (n:nat) := mkdecl a b n.
-
-Definition plus_one_index (l: list (BasicAst.context_decl nat)) :=
+Local Definition plus_one_index (l: list (BasicAst.context_decl nat)) :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)+1)) l.
 
-Definition plus_k_index (l: list (BasicAst.context_decl nat)) k :=
+Local Definition plus_k_index (l: list (BasicAst.context_decl nat)) k :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)+k)) l.
 
-Definition minus_one_index (l: list (BasicAst.context_decl nat)) :=
+Local Definition minus_one_index (l: list (BasicAst.context_decl nat)) :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)-1)) l.
 
-(*
-- generalise extrainfo with arbitary information that can be dynamically looked up
-- fancy lambda, fancy it lambda, fancy case, fancy app, etc (kind of monadically passing around the extrainfo like state)
-- print context
-*)
 
 Inductive information : Type :=
 | information_list (na : string) (l : list (BasicAst.context_decl nat))
@@ -49,38 +39,33 @@ Definition lookup_item (l : list information) (na : string) : nat :=
   | _ => todo
   end.
 
-(* Fixpoint replace_info (info:list information) (na:string)  (l : list (BasicAst.context_decl nat)) :=
-  match info with
-  | (information_list s l0) :: info' =>
-      if String.eqb s na then (information_list na l) :: info'
-      else (information_list s l0) :: (replace_info info' na l)
-  | h :: info' => h :: (replace_info info' na l)
-  | [] => (information_list na l) :: []
-  (* (information_list na l) :: [] *)
-  end. *)
-
-Fixpoint replace_add_info (info:list information) (na:string) (item : BasicAst.context_decl nat) :=
+Local Fixpoint replace_add_info (info:list information) (na:string) (item : BasicAst.context_decl nat) :=
   match info with
   | (information_list s l0) :: info' =>
       if String.eqb s na then (information_list s (item::l0)) :: info'
       else (information_list s l0) :: (replace_add_info info' na item)
   | h :: info' => h :: (replace_add_info info' na item)
   | [] => (information_list na [item]) :: []
-  (* (information_list na l) :: [] *)
   end.
 
+(*
+  We give an xxx for generating things from the (inductive) type definition.
 
+  ex.
+    Inductive type ===> identity function
+    Inductive type ===> inductive principle
+    Inductive type ===> type of inductive principle
+
+  Source of the generation : type definition
+  Target: ......
+*)
+
+(* extrainfo: the local information carried during the generation *)
 Record extrainfo : Type := mkinfo {
   renaming : list (BasicAst.context_decl nat);
-
   info : list information ;
   kn : kername;
 }.
-
-(* Definition empty_info := {|
-  renaming := [];
-  info := []
-|}. *)
 
 Definition add_listinfo e na l :extrainfo :=
   mkinfo e.(renaming) ((information_list na l)::e.(info)) e.(kn).
@@ -89,20 +74,25 @@ Definition add_info_names (e:extrainfo) (str:string) names : extrainfo :=
   let l:= mapi (fun i x => mkdeclnat x None i) names in
   add_listinfo e str l.
 
-
-Definition make_initial_info kn ty :extrainfo :=
+(*Make the initial information.
+  By default, we begin with the info which contains only the kername,
+  and the list of type names
+*)
+Definition make_initial_info (kn:kername) (ty:mutual_inductive_body) :extrainfo :=
   let e := mkinfo [] [] kn in
   add_info_names e "rels_of_T"
     (map (fun ind_body => {| binder_name := nNamed (ind_body.(ind_name));
                         binder_relevance := Relevant  |}
           ) ty.(ind_bodies)).
 
+(*The indicator which shows if some new information should be saved
+  when new variable introduced *)
 Inductive saveinfo:=
   | Savelist (s:string)
   | Saveitem (s:string)
   | NoSave.
 
-Definition update_kp (na:aname) (e:extrainfo) (saveinfo:saveinfo):=
+Local Definition update_kp (na:aname) (e:extrainfo) (saveinfo:saveinfo):=
   let item := mkdeclnat na None 0 in
   let renaming :=
     item :: (plus_one_index e.(renaming))
@@ -114,7 +104,6 @@ Definition update_kp (na:aname) (e:extrainfo) (saveinfo:saveinfo):=
       | information_nat na n => information_nat na (1 + n) end
     ) e.(info)
   in
-  (* mkinfo renaming info *)
   match saveinfo with
   | NoSave => mkinfo renaming info e.(kn)
   | Saveitem str => mkinfo renaming ((information_nat str 0) ::info) e.(kn)
@@ -122,7 +111,7 @@ Definition update_kp (na:aname) (e:extrainfo) (saveinfo:saveinfo):=
   end
   .
 
-Definition update_mk na (e:extrainfo) (saveinfo:saveinfo) : extrainfo :=
+Local Definition update_mk na (e:extrainfo) (saveinfo:saveinfo) : extrainfo :=
   let info := map (
     fun x => match x with
     | information_list na l =>
@@ -138,8 +127,7 @@ Definition update_mk na (e:extrainfo) (saveinfo:saveinfo) : extrainfo :=
   | Savelist str => mkinfo renaming (replace_add_info info str item) e.(kn)
   end.
 
-(*only used in tCase*)
-Definition add_args (e:extrainfo) (ctx: context): extrainfo :=
+Local Definition add_args (e:extrainfo) (ctx: context): extrainfo :=
   let nargs := length ctx in
   let l:= mapi (fun i x => mkdeclnat x.(decl_name) None i) (ctx) in
   (*start with the last argument*)
@@ -193,7 +181,7 @@ Definition fancy_tCase (e:extrainfo) t0 t2 t3 t4 t5 t6 t7 (t8:extrainfo -> list 
          bbody := t (add_args e c) |})
     (t8 e)).
 
-Definition update_ctr_arg_back (e:extrainfo) : extrainfo :=
+Local Definition update_ctr_arg_back (e:extrainfo) : extrainfo :=
   let info_new := map (
     fun x => match x with
     | information_list na l =>
@@ -207,6 +195,8 @@ Definition update_ctr_arg_back (e:extrainfo) : extrainfo :=
   mkinfo (tl e.(renaming)) info_new e.(kn)
 .
 
+(*quite special one*)
+(*Used only when tCase, match with ..., to be explained *)
 Definition map_with_extrainfo_arg {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
   (e:extrainfo) :=
   let fix Ffix f l e:=
@@ -217,51 +207,7 @@ Definition map_with_extrainfo_arg {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
   in
   Ffix f l e.
 
-Definition geti_rename (e:extrainfo) (i:nat) :=
-  let l := map (fun x => x.(decl_type)) e.(renaming) in
-  tRel (nth i l todo).
-
-Definition geti_info (na:string) (e:extrainfo) (i:nat) :=
-  let l := lookup_list e.(info) na in
-  tRel (nth i l todo).(decl_type).
-
-(* Definition get_id_gen (e:extrainfo) (i:nat) :=
-  let l := lookup_list e.(info) "rels_of_id" in
-  tRel (nth i l todo).(decl_type). *)
-
-Definition rels_of (na:string) (e:extrainfo) :=
-  let l := lookup_list e.(info) na in
-  (**)rev(**) (map (fun x => tRel x.(decl_type)) l).
-
-Definition rel_of (na:string) (e:extrainfo) :=
-  let n := lookup_item e.(info) na in
-  tRel n.
-
-Definition is_recursive_call_gen (e:extrainfo) i : option nat:=
-  let l := map (fun x => x.(decl_type)) (lookup_list e.(info) "rels_of_T") in
-  let fix Ffix l j :=
-    match l with
-    | k :: l0 => if eqb k i then Some j else Ffix l0 (j+1)
-      (* if ltb i k then None *)
-    | [] => None
-  end in
-  Ffix l 0.
-
-Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
-  let fix Ffix e t :=
-    match t with
-    | tRel k =>
-      match is_recursive_call_gen e k with
-      | Some i => tInd {| inductive_mind :=e.(kn); inductive_ind := i |} []
-      | None => geti_rename e k
-      end
-    | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
-    | tLambda name t1 t2 => tLambda name (Ffix e t1) (Ffix (update_kp name e NoSave) t2)
-    | _ => t (* todo *)
-  end in
-  Ffix e t.
-
-Definition findi (x:nat) (l:list nat):=
+Local Definition findi (x:nat) (l:list nat):=
   let fix Ffix x l n:=
     match l with
     | [] => None
@@ -270,6 +216,9 @@ Definition findi (x:nat) (l:list nat):=
   in
   Ffix x l 0.
 
+(*
+  Used for nested type. To be explained
+*)
 Definition check_return_type (t:term) (e:extrainfo) : option nat :=
   let fix Ffix t e {struct t}:=
     match t with
@@ -284,14 +233,71 @@ Definition check_return_type (t:term) (e:extrainfo) : option nat :=
   Ffix t e.
 
 
+(*General api*)
+
+(*return the tRel term of the [i]th element of the [e.(renaming)] *)
+Definition geti_rename (e:extrainfo) (i:nat) :=
+  let l := map (fun x => x.(decl_type)) e.(renaming) in
+  tRel (nth i l todo).
+
+(*return the tRel term of the [i]th element of the information list named [na] inside [e.(info)] *)
+Definition geti_info (na:string) (e:extrainfo) (i:nat) :=
+  let l := lookup_list e.(info) na in
+  tRel (nth i l todo).(decl_type).
+
+(*return the reversal tRel term list of the information list named [na] of [e]*)
+Definition rels_of (na:string) (e:extrainfo) :=
+  let l := lookup_list e.(info) na in
+  (**)rev(**) (map (fun x => tRel x.(decl_type)) l).
+
+(*return the tRel term of the informationitem named [na] of [e]*)
+Definition rel_of (na:string) (e:extrainfo) :=
+  let n := lookup_item e.(info) na in
+  tRel n.
+
+(* In the type definition, (mutual inductive, maybe n different inductive bodies)
+   check if the debruijn index [i] refer to an type (being defined),
+   if yes, return its reverse order
+*)
+Definition is_recursive_call_gen (e:extrainfo) i : option nat:=
+  let l := map (fun x => x.(decl_type)) (lookup_list e.(info) "rels_of_T") in
+  let fix Ffix l j :=
+    match l with
+    | k :: l0 => if eqb k i then Some j else Ffix l0 (j+1)
+      (* if ltb i k then None *)
+    | [] => None
+  end in
+  Ffix l 0.
+
+(* Transform the `type term` in the source (type definition)
+          to the `type term` in the target
+*)
+Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
+  let n_ind := length (lookup_list e.(info) "rels_of_T") in
+  let fix Ffix e t :=
+    match t with
+    | tRel k =>
+      match is_recursive_call_gen e k with
+      | Some i => tInd {| inductive_mind :=e.(kn); inductive_ind := n_ind - i - 1 |} []
+      | None => geti_rename e k
+      end
+    | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
+    | tLambda name t1 t2 => tLambda name (Ffix e t1) (Ffix (update_kp name e NoSave) t2)
+    | _ => t (* todo *)
+  end in
+  Ffix e t.
+
+(* Introduce a Prod in the target *)
 Definition mktProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
   let e' := update_mk na e saveinfo in
   tProd na (t1 e) (t2 e').
 
+(* Consume a Prod of the source, introduce it in the target *)
 Definition kptProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
   let e' := update_kp na e saveinfo in
   tProd na (t1 e) (t2 e').
 
+(*iterate kptProd*)
 Definition it_kptProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e t:=
     match ctx with
@@ -303,6 +309,7 @@ Definition it_kptProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrai
   end in
   Ffix ctx e t.
 
+(*iterate mktProd*)
 Definition it_mktProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e e0 t:=
     match ctx with
@@ -315,17 +322,19 @@ Definition it_mktProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrai
   end in
   Ffix ctx e e t.
 
+(* Introduce a Lambda in the target *)
 Definition mktLambda saveinfo na (e:extrainfo)  (t1:extrainfo -> term)
   (t2:extrainfo -> term)
   : term :=
   tLambda na (t1 e) (t2 (update_mk na e saveinfo)).
 
+(* Consume a Prod of the source, introduce it in the target *)
 Definition kptLambda saveinfo na (e:extrainfo) (t1:extrainfo -> term)
   (t2:extrainfo -> term)
   : term :=
   tLambda na (t1 e) (t2 (update_kp na e saveinfo)).
 
-
+(*iterate mktLambda*)
 Definition it_mktLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e e0 t:=
     match ctx with
@@ -338,6 +347,7 @@ Definition it_mktLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extr
   end in
   Ffix ctx e e t.
 
+(*iterate kptLambda*)
 Definition it_kptLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
   let fix Ffix ctx e t:=
     match ctx with

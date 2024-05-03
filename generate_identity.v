@@ -127,7 +127,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     (fun _ => [])
                     (fun e => rels_of "params" e)
                     (fun e =>
-                      listmake the_name (1 + length (lookup_list e.(info) "indices"))
+                      repeat the_name (1 + length (lookup_list e.(info) "indices"))
                      )
                     (fun e =>
                       tApp (tInd the_inductive Instance.empty)
