@@ -46,14 +46,14 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     let aux (e:extrainfo) (b:list constructor_body) (t:extrainfo -> term) :term :=
       let fix Ffix e b (t:extrainfo -> term) i :=
 
-        (* build the type of a type constructor *)
-        (* take nat, 'S : nat -> nat' for example *)
-        (* ~~~~> forall (n:nat), P n -> P (S n) *)
+        (* for each type constructor *)
+        (* take Vector.t, 'cons : A -> forall n:nat, vec A n -> vec A (S n)' for example *)
+        (* ~~~~> forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons a n v) *)
         let auxctr (e:extrainfo) (ctr:constructor_body) i : term :=
           let constructor_current := tConstruct the_inductive i [] in
           let cstr_type := ctr.(cstr_type) in
           (*get the return type of the type constructor*)
-          (*nat*)
+          (*vec A (S n)*)
           let return_type: term :=
             (fix Ffix t :=
               match t with
@@ -62,7 +62,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
               end ) cstr_type
           in
           (*transforme the return type of constructor*)
-          (*~~~> P (S n)*)
+          (*~~~> P (S n) (cons a n v)*)
           let transformer_result (t:term) :extrainfo -> term := fun e =>
             match t with
             | tApp (tRel i) tl =>
@@ -91,7 +91,9 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
             | _ => todo end (*must be an error*)
           in
           (*transforme the argument*)
-          (*~~~> forall (n:nat), P n*)
+            (*A ~~~> forall (a:A)*)
+            (*forall (n:nat) ~~~> forall (n:nat)*)
+            (*vec A n ~~~> forall (v:vec A n) -> P n v *)
           let auxarg arg (t:extrainfo->term) :extrainfo -> term :=
             let t1 := arg.(decl_type) in
             let na := arg.(decl_name) in
@@ -151,8 +153,27 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
       Ffix e b t 0
     in
 
+    (*
+      for type
+      Inductive T (A1:Param1) ... (Ak:Paramk) : Ind1 -> ... -> Indm -> Type.
+
+      Its inductive principle has type:
+
+      forall (A1:Param1) ... (Ak:Paramk),
+      forall (P: forall (i1:Ind1) ... (im:Indm), T A1 ... Ak i1 ... im -> Prop),
+      ...(generated according to the type constructors)
+      -> forall (i1:Ind1) ... (im:Indm),
+         forall (x:T A1 ... Ak i1 ... im), P i1 ... im x
+
+    *)
+
+    (* attention: in the quotation of inductive type, the parameters, indices
+       are in reverse order *)
+
+    (*forall (A1:Param1) ... (Ak:Paramk),*)
     it_kptProd (Savelist "params") (rev params) initial_info $
       fun e =>
+        (*forall (P: forall (i1:Ind1) ... (im:Indm), T A1 ... Ak i1 ... im -> Prop),*)
         mktProd (Saveitem "P") prop_name e
           (fun e => it_mktProd (Savelist "indices") (rev indices) e $
              fun e => tProd the_name
@@ -164,6 +185,8 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
           (fun e =>
             aux e body.(ind_ctors)
               (fun e =>
+                (*forall (i1:Ind1) ... (im:Indm),
+                  forall (x:T A1 ... Ak i1 ... im), P i1 ... im x*)
                 it_mktProd (Savelist "indices") (rev indices) e $
                   fun e =>
                     mktProd (Saveitem "x") the_name e

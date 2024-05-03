@@ -88,8 +88,6 @@ with Config : Type :=
 MetaCoq Run Derive InductivePrinciple Point as "indp_point".
 Print indp_point.
 
-
-
 (* Require Import MetaCoqPrelude. *)
 
 (* MetaCoq Run PrintInductivePrinciple Acc. *)
