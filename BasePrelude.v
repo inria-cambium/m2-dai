@@ -48,6 +48,8 @@ Local Fixpoint replace_add_info (info:list information) (na:string) (item : Basi
   | [] => (information_list na [item]) :: []
   end.
 
+
+(****************************************************************)
 (*
   We give an xxx for generating things from the (inductive) type definition.
 
@@ -62,10 +64,33 @@ Local Fixpoint replace_add_info (info:list information) (na:string) (item : Basi
 
 (* extrainfo: the local information carried during the generation *)
 Record extrainfo : Type := mkinfo {
+  (*renaming:
+      A renaming from the source environment (type definition) to the target environment:
+
+      At any point of the generation process,
+      the ith (begin with 0th) element of renaming has decl_type j means:
+        the (tRel i) in the source environment = (tRel j) in the target environment.
+
+      ex.
+        generating the identity function of Vector.t
+
+        Source:
+          Inductive vec (A:Type) :nat -> Type := ...
+                                          ^
+        Target:
+          Fixpoint id (A:Type) (n:nat) (v:vec A n) := ...
+                                        ^
+        When we are at the point to define this v, the parameter (A:Type) and indice (nat) are visited,
+        the renaming should be [1]: means that that here (tRel 0) of source should be (tRel 1) in the target, i.e. A
+
+        *)
   renaming : list (BasicAst.context_decl nat);
+  (*info: to save some useful information (parameters, indices, ...) *)
   info : list information ;
   kn : kername;
 }.
+
+
 
 Definition add_listinfo e na l :extrainfo :=
   mkinfo e.(renaming) ((information_list na l)::e.(info)) e.(kn).
@@ -233,8 +258,8 @@ Definition check_return_type (t:term) (e:extrainfo) : option nat :=
   Ffix t e.
 
 
-(*General api*)
 
+(****************************************************************)
 (*return the tRel term of the [i]th element of the [e.(renaming)] *)
 Definition geti_rename (e:extrainfo) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
@@ -287,7 +312,13 @@ Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
   end in
   Ffix e t.
 
-(* Introduce a Prod in the target *)
+(* Introduce a Prod in the target, introduce a new variable that could be referenced *)
+(* [saveinfo]: if save the information of this new variable into e
+   [na]:       the aname of the new variable
+   [e]:        the local information
+   [t1]:       the type of new variable
+   [t2]:       the result term
+*)
 Definition mktProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
   let e' := update_mk na e saveinfo in
   tProd na (t1 e) (t2 e').
@@ -321,6 +352,25 @@ Definition it_mktProd (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extrai
           (Ffix ctx' e' e0 t)
   end in
   Ffix ctx e e t.
+(* How to choose [mktProd] [kptProd]:
+
+  Source: inductive type definition
+    Inductive T (A1:Param1) ... (Ak:Paramk): Ind1 -> Ind2 ...  ->Indm -> Type := ... .
+
+  [kptProd] uses [update_kp], [update_mk] uses [update_mk]
+
+  [update_kp] changes the information of "rels_of_T", add one new renamed item into the shifted renaming list
+  [update_mk] does not change the information of "rels_of_T", just shift the renaming list
+
+  When creating a Prod in the target,
+  use [kptProd saveinfo na e t1 t2] if [na] refers to a term that could be referenced to (by tRel _) in the source
+  use [mktProd] otherwise.
+
+  ex. for the type definitin above,
+    (A1, ... Ak) can be referenced in the source, so we use [kptProd]
+    (Ind1,..., Indm) can not be referenced in the source, so use [mktProd]
+*)
+
 
 (* Introduce a Lambda in the target *)
 Definition mktLambda saveinfo na (e:extrainfo)  (t1:extrainfo -> term)
@@ -358,25 +408,30 @@ Definition it_kptLambda (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t: extr
   end in
   Ffix ctx e t.
 
-Axiom print_info: extrainfo -> forall {A}, A.
 
 
-(*If just need to get information from the source type definition
+
+
+(****************************************************************)
+(*If just need to get information from the source
   no need to generate term, use functions below
 *)
 
-Definition kptProd_util {Y:Type}
-  (saveinfo:saveinfo) na e (t1:extrainfo -> Y -> Y) (acc:extrainfo -> Y) :=
+Definition update_kp_util {Y:Type} saveinfo na e
+  (t1:extrainfo -> Y -> Y) (acc:extrainfo -> Y) :Y :=
   let e' := update_kp na e saveinfo in
   (t1 e) (acc e').
 
-Definition it_kptProd_util {Y:Type}
-  (saveinfo:saveinfo) (ctx:context) (e:extrainfo) (t0:extrainfo -> Y -> Y) (acc: extrainfo -> Y) :Y :=
+Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:extrainfo)
+  (t0:extrainfo -> Y -> Y) (acc: extrainfo -> Y) :Y :=
   let fix Ffix ctx e acc:=
     match ctx with
     | [] => acc e
     | decl :: ctx' =>
-        kptProd_util saveinfo decl.(decl_name) e t0
+        update_kp_util saveinfo decl.(decl_name) e t0
           (fun e => Ffix ctx' e acc)
   end in
   Ffix ctx e acc.
+
+
+Axiom print_info: extrainfo -> forall {A}, A.
