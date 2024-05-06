@@ -15,9 +15,8 @@ Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool
         fold_right (
           fun ctr bl =>
             let fix Ffix args e bl :=
-              let aux arg e bl:=
-                let t := arg.(decl_type) in
-                match t with
+              let fix aux argtype e bl:=
+                match argtype with
                 | tApp (tRel i) tl =>
                   match is_recursive_call_gen e i with
                   | Some _ =>
@@ -32,13 +31,15 @@ Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool
                         ) (firstn npars tl))
                   | None => bl
                   end
+                | tProd na t1 t2 =>
+                    update_kp_util NoSave na e (fun e y => y) (fun e => aux t2 e bl)
                 | _ => bl end
               in
               match args with
               | [] => bl
               | arg :: l =>
                   update_kp_util NoSave arg.(decl_name) e
-                    (fun e => aux arg e) (fun e => Ffix l e bl)
+                    (fun e => aux arg.(decl_type) e) (fun e => Ffix l e bl)
             end in
             Ffix (rev ctr.(cstr_args)) e bl
         ) bl' body.(ind_ctors))
@@ -74,3 +75,10 @@ with smt (n:nat) : Type := STH (m:nat) (_:smt m) : smt n
 Definition input_le0':= ($run (tmQuoteInductive (thisfile, "le0'"))).
 Compute (CheckUniformParam (thisfile, "le0'") input_le0').
 (* Check le0'_ind. *)
+
+
+Inductive Acc (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
+	Acc_intro : (forall y : A, R y x -> Acc A R y) -> Acc A R x.
+Definition input_acc:= ($run (tmQuoteInductive (thisfile, "Acc"))).
+Compute (CheckUniformParam (thisfile, "Acc") input_acc).
+

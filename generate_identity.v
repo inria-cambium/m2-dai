@@ -104,7 +104,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         it_kptProd (Savelist "params") (rev params) (initial_info) $
           fun e => it_mktProd (Savelist "indices") (rev indices) e $
             fun e =>
-              kptProd NoSave the_name e
+              mktProd NoSave the_name e
                 (fun e => tApp
                   (tInd the_inductive Instance.empty)
                     (rels_of "params" e ++ rels_of "indices" e))

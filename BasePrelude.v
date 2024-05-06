@@ -220,7 +220,6 @@ Local Definition update_ctr_arg_back (e:extrainfo) : extrainfo :=
   mkinfo (tl e.(renaming)) info_new e.(kn)
 .
 
-(*quite special one*)
 (*Used only when tCase, match with ..., to be explained *)
 Definition map_with_extrainfo_arg {X Y:Type} (f:X -> extrainfo -> Y) (l:list X)
   (e:extrainfo) :=
@@ -308,6 +307,7 @@ Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
       end
     | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
     | tLambda name t1 t2 => tLambda name (Ffix e t1) (Ffix (update_kp name e NoSave) t2)
+    | tProd na t1 t2 => tProd na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
     | _ => t (* todo *)
   end in
   Ffix e t.

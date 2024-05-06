@@ -94,4 +94,23 @@ Print indp_point.
 
 (* Require Import MetaCoqPrelude. *)
 
+
+(* Print Acc. *)
+
+Inductive Acc (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
+	Acc_intro : (forall y : A, R y x -> Acc A R y) -> Acc A R x.
 (* MetaCoq Run PrintInductivePrinciple Acc. *)
+
+MetaCoq Run Derive InductivePrinciple Acc as "indp_acc".
+Print indp_acc.
+
+(* Load MetaCoqPrelude. *)
+(* Check $quote( *)
+(* forall (A : Type) (R : A -> A -> Prop)
+         (P : forall x : A, Acc A R x -> Prop),
+       (forall (x : A) (a : forall y : A, R y x -> Acc A R y),
+        (forall (y : A) (r : R y x), P y (a y r)) -> P x (Acc_intro A R x a)) ->
+       forall (x : A) (a : Acc A R x), P x a *)
+(* ). *)
+
+(* Check Acc_ind. *)
