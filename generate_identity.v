@@ -61,34 +61,35 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   end
                 | tProd _ _ _ =>
                   (***********)
-                  let fix transformer (t:term) (u:term) (n_id:nat) e :=
-                    let fix lift (t:term) :term :=
-                      match t with
-                      | tRel i => tRel (i+1)
-                      | tApp t tl => tApp (lift t) (map lift tl)
-                      | _ => todo (*impossible to take this branch*)
-                      end
-                    in
+                  let fix transformer (t:term) e (u:extrainfo -> term) :term :=
                     match t with
-                    | tProd _ t1 t2 =>
-                      kptLambda NoSave the_name e
+                    | tProd na t1 t2 =>
+                      kptLambda (Savelist "arglambda") na e
                         (fun e => type_rename_transformer e t1)
-                        (fun e =>
-                          transformer t2 (tApp (lift u) [tRel 0]) n_id e)
-                    | tApp (tRel _) tl =>
-                        tApp (geti_info "rels_of_id" e n_id)
-                          ((map (type_rename_transformer e) tl)
-                            ++ [u])
-                    | tRel _ => tApp (geti_info "rels_of_id" e n_id) [u]
-                    | _ => todo (* other cases exist? *)
-                    end in
+                        (fun e => transformer t2 e u)
+                    | tApp (tRel j) tl =>
+                      match is_recursive_call_gen e j with
+                      | None => todo (*must be an error*)
+                      | Some kk =>
+                          tApp (geti_info "rels_of_id" e kk)
+                          (map (type_rename_transformer e) tl ++
+                            [tApp (u e) (rels_of "arglambda" e)])
+                      end
+                    | tRel j =>
+                      match is_recursive_call_gen e j with
+                      | None => todo (*must be an error*)
+                      | Some kk =>
+                          tApp (geti_info "rels_of_id" e kk) [tApp (u e) (rels_of "arglambda" e)]
+                      end
+                    | _ => todo
+                    end
+                  in
                   match check_return_type arg.(decl_type) e with
                   | None => arg_current
-                  | Some kk =>
-                      transformer arg.(decl_type) arg_current kk e
+                  | Some _ =>
+                      transformer arg.(decl_type) e (fun e => rel_of "arg_current" e)
                   end
                   (***********)
-                  (* arg_current *)
                 | _ => arg_current end
               in
               map_with_extrainfo_arg auxarg b.(cstr_args) e)

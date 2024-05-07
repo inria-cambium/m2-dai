@@ -130,7 +130,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                   (fun e => tInd the_inductive [])
                   (fun e =>
                     kptProd NoSave the_name e
-                      (fun e => tApp (rel_of "P" e) [tRel 0])
+                      (fun e => tApp (rel_of "P" e) [geti_info "args" e 0 (*tRel 0*)])
                       t)
               (*ex. forall (n:nat)/  A*)
               | None =>
@@ -155,7 +155,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                       (fun e => tApp
                         (rel_of "P" e)
                         (let tl := n_tl tl (length params) in
-                          (map (type_rename_transformer e) tl) (*n*) ++ [tRel 0] (*v*))
+                          (map (type_rename_transformer e) tl) (*n*) ++ [geti_info "args" e 0 (*tRel 0*)] (*v*))
                       ) t)
               | None =>
                 kptProd (Savelist "args") na e
@@ -167,11 +167,11 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
               match check_return_type t1 e with
               | None => kptProd (Savelist "args") na e (fun e => type_rename_transformer e t1) t
               | Some _ =>
-                let fix myaux e t1 :=
+                let fix aux_nested e t1 :=
                   match t1 with
                   | tProd na ta tb =>
                     kptProd (Savelist "arglambda") na e
-                      (fun e => type_rename_transformer e ta) (fun e => myaux e tb)
+                      (fun e => type_rename_transformer e ta) (fun e => aux_nested e tb)
                   | tRel _ =>
                     match is_recursive_call_gen e i with
                     | None => todo
@@ -190,7 +190,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                     end
                   | _ => todo end in
                 mktProd (Savelist "args") na e (fun e => type_rename_transformer e t1)
-                  (fun e => kptProd NoSave the_name e (fun e => myaux e t1) t)
+                  (fun e => kptProd NoSave the_name e (fun e => aux_nested e t1) t)
               end
             (**********************)
             | _ => kptProd (Savelist "args") na e
@@ -382,11 +382,11 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
               match check_return_type t1 e with
               | None => kptProd (Savelist "args") na e (fun e => type_rename_transformer e t1) t
               | Some _ =>
-                let fix myaux e t1 :=
+                let fix aux_nested e t1 :=
                   match t1 with
                   | tProd na ta tb =>
                     kptProd (Savelist "arglambda") na e
-                      (fun e => type_rename_transformer e ta) (fun e => myaux e tb)
+                      (fun e => type_rename_transformer e ta) (fun e => aux_nested e tb)
                   | tRel i =>
                     match is_recursive_call_gen e i with
                     | None => todo
@@ -405,7 +405,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                     end
                   | _ => todo end in
                 mktProd (Savelist "args") na e (fun e => type_rename_transformer e t1)
-                  (fun e => kptProd NoSave the_name e (fun e => myaux e t1) t)
+                  (fun e => kptProd NoSave the_name e (fun e => aux_nested e t1) t)
               end
             (*****************************************)
             | _ => kptProd (Savelist "args") na e
