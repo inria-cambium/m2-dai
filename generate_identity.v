@@ -102,8 +102,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        it_kptProd (Savelist "params") (rev params) (initial_info) $
-          fun e => it_mktProd (Savelist "indices") (rev indices) e $
+        it_kptProd (Some "params") (params) (initial_info) $
+          fun e => it_mktProd (Some "indices") (indices) e $
             fun e =>
               mktProd NoSave the_name e
                 (fun e => tApp
@@ -116,8 +116,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         ;
       (*params is in reverse order*)
       dbody :=
-        it_kptLambda (Savelist "params") (rev params) (initial_info) $
-          fun e => it_mktLambda (Savelist "indices") (rev indices) e $
+        it_kptLambda (Some "params") (params) (initial_info) $
+          fun e => it_mktLambda (Some "indices") (rev indices) e $
             fun e =>
               mktLambda (Saveitem "x") the_name e
                 (fun e => tApp (tInd the_inductive Instance.empty) (rels_of "params" e ++ rels_of "indices" e))

@@ -1,17 +1,11 @@
 Require Import BasePrelude.
 Require Import param_checker.
-
-(* From MetaCoq Require Export bytestring. *)
 Global Open Scope bs.
-
 
 (*This is an example of using BasePrelude:
   generate the type of inductive principle of any inductive type*)
 
-
-
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
-
 
 Definition the_name := {| binder_name := nNamed "x"; binder_relevance := Relevant |}.
 Definition prop_name := {| binder_name := nNamed "P"; binder_relevance := Relevant |}.
@@ -24,8 +18,10 @@ Fixpoint n_tl {A} (l:list A) n :=
   end
 .
 
-(*seperating the list of parameters into "uniform params" and "not uniform params"*)
-(*for inductive principle, "not uniform parameter" is treated the same way as index (different from uniform)*)
+(*seperating the list of parameters into "uniform params" and "non-uniform params"*)
+(*for inductive principle, "non-uniform parameter" is treated the same way as index (different from uniform)*)
+(*the function below just find the first non-uniform param and split the list,
+  the params after the first non-uniform one are regarded as if they are not uniform        *)
 Definition SeperateParams (kn:kername) (ty:mutual_inductive_body) :=
   let findi {X} (f: X -> bool) (l:list X) :option nat :=
     let fix Ffix l n:=
@@ -42,6 +38,16 @@ Definition SeperateParams (kn:kername) (ty:mutual_inductive_body) :=
   | Some i => (skipn (length params - i) params, firstn (length params - i) params)
   end.
 
+(* Definition SeperateParams2 (kn:kername) (ty:mutual_inductive_body) :=
+  let params := ty.(ind_params) in
+  let bl := CheckUniformParam kn ty in
+  let fix Ffix l1 l2 (bl:list bool) :=
+    match bl with
+    | [] => (l1, l2)
+    | b :: bl => if b then Ffix (b :: l1) l2 bl else Ffix l1 (b :: l2) bl
+    end
+  in
+  Ffix [] [] (rev bl). *)
 
 (*works for inductive type not mutual inductive*)
 Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
@@ -49,15 +55,10 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     (*make up the initial information, which has the information of the type name*)
     let initial_info :=  make_initial_info na ty in
     (* suppose single inductive body*)
-    let body :=
-      match ty.(ind_bodies) with
-      | [] => todo
-      | body :: _ => body
-      end
-    in
+    let body := hd todo ty.(ind_bodies) in
     let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
     let indices := body.(ind_indices) in
-    let (params, no_uniform_params) := SeperateParams na ty in
+    (* let (params, no_uniform_params) := SeperateParams na ty in *)
 
     (*for each constructor cstr in [b], generate a term (ti)*)
     (*returns t1 -> t2 -> ... tk -> [t e_updated]*)
@@ -98,7 +99,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                       [           (*cons*)
                         tApp constructor_current
                           (* A *)                                                    (*  a n v  *)
-                          (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)
+                          (rels_of "params" e ++ rels_of "args" e)
                       ])
               | None => todo (*must be an error*)
               end
@@ -108,7 +109,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                 tApp
                   (rel_of "P" e)
                   [ tApp constructor_current
-                    (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)
+                    (rels_of "params" e ++ rels_of "args" e)
                     ]
               | None => todo (*must be an error*)
               end
@@ -210,9 +211,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         | [] => t e
         | ctr :: l =>
             mktProd NoSave the_name e
-              (fun e =>
-                it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
-                 fun e => auxctr e ctr i)
+              (fun e => auxctr e ctr i)
               (fun e => Ffix e l t (i+1))
         end
       in
@@ -233,23 +232,22 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
          forall (x:T A1 ... Ak i1 ... im), P i1 ... im x
     *)
 
-
-
     (* ATTENTION: in the quotation of inductive type, the parameters, indices are in reverse order *)
     (*forall (A1:Param1) ... (Ak:Paramk),*)
-    it_kptProd (Savelist "params") (rev params) initial_info $
+    it_kptProd (Some "params") (params) initial_info $
       fun e =>
         (*forall P:?, ?*)
         mktProd (Saveitem "P") prop_name e
           (*type of P: forall (i1:Ind1) ... (im:Indm), T A1 ... Ak i1 ... im -> Prop*)
           (fun e =>
             (*forall (i1:Ind1) ... (im:Indm)*)
-            it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
-            fun e => it_mktProd (Savelist "indices") (rev indices) e $
+             it_mktProd (Some "indices") (indices) e $
              fun e => tProd the_name
                 (*T A1 ... Ak i1 ... im*)
                 (tApp (tInd the_inductive [])
-                  (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e)
+                  (rels_of "params" e
+                    (* ++ rels_of "no_uniform_params" e  *)
+                    ++ rels_of "indices" e)
                 )
                 (tSort sProp) (*Prop*)
             )
@@ -260,23 +258,24 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
               (fun e =>
                 (*forall (i1:Ind1) ... (im:Indm),
                   forall (x:T A1 ... Ak i1 ... im), P i1 ... im x*)
-                it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
-                fun e => it_mktProd (Savelist "indices") (rev indices) e $
+                it_mktProd (Some "indices") (indices) e $
                   fun e =>
                     mktProd (Saveitem "x") the_name e
                       (*type of x: T A1 ... Ak i1 ... im*)
                       (fun e =>
                         tApp (tInd the_inductive [])
-                          (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e)
+                          (rels_of "params" e ++ rels_of "indices" e)
                         )
                       (*P i1 ... im x*)
                       (fun e => tApp (rel_of "P" e)
-                        (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e]))
+                        (rels_of "indices" e ++ [rel_of "x" e]))
             ))
     .
 
 
 (****************************************************************)
+(*for mutual inductive type*)
+
 Fixpoint fold_right_i_aux {A B : Type} (f : B -> nat -> A -> A) i (l:list B) (a0 : A) :=
   match l with
   | [] => a0
@@ -426,7 +425,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
             mktProd NoSave the_name e
             (
               fun e =>
-              it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
+              it_kptProd (Some "no_uniform_params") (no_uniform_params) e $
               fun e => auxctr e ctr i)
             (fun e => Ffix e l t (i+1))
         end
@@ -437,15 +436,15 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
     let indices_main := mainbody.(ind_indices) in
     let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
 
-    it_kptProd (Savelist "params") (rev params) initial_info $
+    it_kptProd (Some "params") (params) initial_info $
       fold_right_i_aux (
         fun body i t => fun e =>
           let the_inductive := {| inductive_mind := kername; inductive_ind :=i |} in
           let indices := body.(ind_indices) in
           mktProd (Savelist "P") prop_name e
             (fun e =>
-            it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
-            fun e => it_mktProd (Savelist "indices") (rev indices) e $
+            it_kptProd (Some "no_uniform_params") (no_uniform_params) e $
+            fun e => it_mktProd (Some "indices") (indices) e $
               fun e => tProd the_name
                 (tApp (tInd the_inductive [])
                  (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
@@ -456,8 +455,8 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
           (fun body i t => fun e => aux e body.(ind_ctors) i t)
           0 bodies
           (fun e =>
-            it_kptProd (Savelist "no_uniform_params") (rev no_uniform_params) e $
-            fun e => it_mktProd (Savelist "indices") (rev indices_main) e $
+            it_kptProd (Some "no_uniform_params") (no_uniform_params) e $
+            fun e => it_mktProd (Some "indices") (indices_main) e $
               fun e =>
                 mktProd (Saveitem "x") the_name e
                   (fun e =>

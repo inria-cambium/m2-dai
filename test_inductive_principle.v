@@ -9,13 +9,16 @@ Print indp_nat.
 Inductive myvec (A:Type) : nat -> Type :=
  | myvnil : myvec A 0
  | myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
-
 (* Definition thisfile := $run (tmCurrentModPath tt).
 Definition input := ($run (tmQuoteInductive (thisfile, "myvec"))).
 Compute (GenerateIndp_mutual (thisfile, "myvec") input). *)
 MetaCoq Run Derive InductivePrinciple myvec as "indp_myvec".
 Print indp_myvec.
+Print myvec_ind.
 
+
+
+(* Print myvec_ind. *)
 
 Inductive myvec2 (A:Type) : nat -> Type :=
  | myvnil2 : myvec2 A 1
@@ -104,13 +107,20 @@ Inductive Acc (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
 MetaCoq Run Derive InductivePrinciple Acc as "indp_acc".
 Print indp_acc.
 
-(* Load MetaCoqPrelude. *)
-(* Check $quote( *)
 (* forall (A : Type) (R : A -> A -> Prop)
          (P : forall x : A, Acc A R x -> Prop),
        (forall (x : A) (a : forall y : A, R y x -> Acc A R y),
         (forall (y : A) (r : R y x), P y (a y r)) -> P x (Acc_intro A R x a)) ->
        forall (x : A) (a : Acc A R x), P x a *)
-(* ). *)
 
-(* Check Acc_ind. *)
+
+
+(*
+  uniform parameter,
+  non-uniform parameter,
+
+  Notice that the (type of) uniform parameter cannot depend on the non-uniform parameters.
+
+
+
+*)
