@@ -370,14 +370,14 @@ Definition type_rename_transformer (e:extrainfo) (t:term) : term:=
    [t1]:       the type of new variable (need to be fed with extrainfo)
    [t2]:       the term (need to be fed with extrainfo)
 *)
-Definition mktProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
+Definition mktProd (saveinfo:saveinfo) na e (t1:term) (t2:extrainfo -> term) :=
   let e' := update_mk na e saveinfo in
-  tProd na (t1 e) (t2 e').
+  tProd na (t1) (t2 e').
 
 (* Consume a Prod of the source, introduce it in the target *)
-Definition kptProd (saveinfo:saveinfo) na e (t1:extrainfo -> term) (t2:extrainfo -> term) :=
+Definition kptProd (saveinfo:saveinfo) na e (t1:term) (t2:extrainfo -> term) :=
   let e' := update_kp na e saveinfo in
-  tProd na (t1 e) (t2 e').
+  tProd na (t1) (t2 e').
 
 (*iterate kptProd*)
 Definition it_kptProd (saveinfo:option string) (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
@@ -391,7 +391,7 @@ Definition it_kptProd (saveinfo:option string) (ctx:context) (e:extrainfo) (t: e
         Ffix ctx' e (
           fun e =>
             kptProd saveinfo decl.(decl_name) e
-              (fun e => type_rename_transformer e decl.(decl_type))
+              (type_rename_transformer e decl.(decl_type))
               t
         )
   end in
@@ -438,16 +438,16 @@ Definition it_mktProd (saveinfo:option string) (ctx:context) (e:extrainfo) (t: e
 
 
 (* Introduce a Lambda in the target *)
-Definition mktLambda saveinfo na (e:extrainfo)  (t1:extrainfo -> term)
+Definition mktLambda saveinfo na (e:extrainfo)  (t1:term)
   (t2:extrainfo -> term)
   : term :=
-  tLambda na (t1 e) (t2 (update_mk na e saveinfo)).
+  tLambda na (t1) (t2 (update_mk na e saveinfo)).
 
 (* Consume a Prod of the source, introduce it in the target *)
-Definition kptLambda saveinfo na (e:extrainfo) (t1:extrainfo -> term)
+Definition kptLambda saveinfo na (e:extrainfo) (t1:term)
   (t2:extrainfo -> term)
   : term :=
-  tLambda na (t1 e) (t2 (update_kp na e saveinfo)).
+  tLambda na (t1) (t2 (update_kp na e saveinfo)).
 
 (*iterate mktLambda*)
 Definition it_mktLambda saveinfo (ctx:context) (e:extrainfo) (t: extrainfo -> term) : term :=
@@ -479,7 +479,7 @@ Definition it_kptLambda saveinfo (ctx:context) (e:extrainfo) (t: extrainfo -> te
         Ffix ctx' e (
           fun e =>
             kptLambda saveinfo decl.(decl_name) e
-              (fun e => type_rename_transformer e decl.(decl_type))
+              (type_rename_transformer e decl.(decl_type))
               t
         )
   end in
@@ -505,8 +505,10 @@ Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:extrainfo)
     match ctx with
     | [] => acc e
     | decl :: ctx' =>
-        update_kp_util saveinfo decl.(decl_name) e t0
-          (fun e => Ffix ctx' e acc)
+        Ffix ctx' e (
+          fun e =>
+            update_kp_util saveinfo decl.(decl_name) e t0 acc
+        )
   end in
   Ffix ctx e acc.
 

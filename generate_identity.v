@@ -9,6 +9,9 @@ Definition the_name := {| binder_name := nNamed "x";
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 
 
+Notation " x '<-' c1 ';;' c2" := ( c1 (fun x => c2))
+                                     (at level 100, c1 at next level, right associativity) : monad_scope.
+
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
   let params := ty.(ind_params) in
@@ -65,7 +68,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     match t with
                     | tProd na t1 t2 =>
                       kptLambda (Savelist "arglambda") na e
-                        (fun e => type_rename_transformer e t1)
+                        (type_rename_transformer e t1)
                         (fun e => transformer t2 e u)
                     | tApp (tRel j) tl =>
                       match is_recursive_call_gen e j with
@@ -102,41 +105,33 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        it_kptProd (Some "params") (params) (initial_info) $
-          fun e => it_mktProd (Some "indices") (indices) e $
-            fun e =>
-              mktProd NoSave the_name e
-                (fun e => tApp
-                  (tInd the_inductive Instance.empty)
-                    (rels_of "params" e ++ rels_of "indices" e))
+        e <- it_kptProd (Some "params") (params) (initial_info);;
+        e <- it_mktProd (Some "indices") (indices) e ;;
+        e <- mktProd NoSave the_name e
+              (tApp (tInd the_inductive Instance.empty)
+                (rels_of "params" e ++ rels_of "indices" e));;
+        tApp (tInd the_inductive Instance.empty)
+          (rels_of "params" e ++ rels_of "indices" e);
 
-                (fun e => tApp
-                  (tInd the_inductive Instance.empty)
-                    (rels_of "params" e ++ rels_of "indices" e))
-        ;
       (*params is in reverse order*)
       dbody :=
-        it_kptLambda (Some "params") (params) (initial_info) $
-          fun e => it_mktLambda (Some "indices") (rev indices) e $
-            fun e =>
-              mktLambda (Saveitem "x") the_name e
-                (fun e => tApp (tInd the_inductive Instance.empty) (rels_of "params" e ++ rels_of "indices" e))
-                (fun e =>
-                  fancy_tCase e
-                    (fun _ => the_inductive)
-                    (fun _ => Relevant)
-                    (fun _ => [])
-                    (fun e => rels_of "params" e)
-                    (fun e =>
-                      repeat the_name (1 + length (lookup_list e.(info) "indices"))
-                     )
-                    (fun e =>
-                      tApp (tInd the_inductive Instance.empty)
-                      ((rels_of "params" e ) ++ (rels_of "pcontext_indices" e)))
-                    (fun e => rel_of "x" e)
-                    (fun e => mapi (aux e) body.(ind_ctors))
-                )
-                ;
+        e <- it_kptLambda (Some "params") (params) (initial_info);;
+        e <- it_mktLambda (Some "indices") (rev indices) e;;
+        e <- mktLambda (Saveitem "x") the_name e
+              (tApp (tInd the_inductive Instance.empty)
+                (rels_of "params" e ++ rels_of "indices" e));;
+        fancy_tCase e
+          (fun _ => the_inductive)
+          (fun _ => Relevant)
+          (fun _ => [])
+          (fun e => rels_of "params" e)
+          (fun e => repeat the_name (1 + length (lookup_list e.(info) "indices")))
+          (fun e =>
+            tApp (tInd the_inductive Instance.empty)
+            ((rels_of "params" e ) ++ (rels_of "pcontext_indices" e)))
+          (fun e => rel_of "x" e)
+          (fun e => mapi (aux e) body.(ind_ctors));
+
       rarg := length indices + length params
     |}
   in

@@ -8,7 +8,7 @@ Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool
   let npars := length params in
   let res := repeat true npars in
   let initial_info := make_initial_info kn ty in
-  fold_update_kp_util (Savelist "params") (rev params) initial_info
+  fold_update_kp_util (Savelist "params") (params) initial_info
     (fun _ bl => bl)
     (fun e =>
       fold_right (fun body bl' =>
