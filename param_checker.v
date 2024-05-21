@@ -3,49 +3,53 @@ Require Import BasePrelude.
 Definition and_listbool (l:list bool) (l':list bool) :=
   map2 (fun a b => andb a b) l l'.
 
-Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool :=
+Definition visit_args {X} (kn:kername) (ty:mutual_inductive_body)
+  (init:X) (aux:context_decl->extrainfo->X->X): X:=
+  let initial_info := make_initial_info kn ty in
   let params := ty.(ind_params) in
   let npars := length params in
-  let res := repeat true npars in
   let initial_info := make_initial_info kn ty in
   fold_update_kp_util (Savelist "params") (params) initial_info
-    (fun _ bl => bl)
+    (fun _ x => x)
     (fun e =>
-      fold_right (fun body bl' =>
-        fold_right (
-          fun ctr bl =>
-            let fix Ffix args e bl :=
-              let fix aux argtype e bl:=
-                match argtype with
-                | tApp (tRel i) tl =>
-                  match is_recursive_call_gen e i with
-                  | Some _ =>
-                    and_listbool bl
-                      (mapi (
-                        fun i t =>
-                          match t with
-                          | tRel k =>
-                              if tRel k == (geti_info "params" e (npars-1-i))
-                              then true else false
-                          | _ => false end
-                        ) (firstn npars tl))
-                  | None => bl
-                  end
-                | tProd na t1 t2 =>
-                    update_kp_util NoSave na e (fun e y => y) (fun e => aux t2 e bl)
-                | _ => bl end
-              in
-              match args with
-              | [] => bl
-              | arg :: l =>
-                  update_kp_util NoSave arg.(decl_name) e
-                    (fun e => aux arg.(decl_type) e) (fun e => Ffix l e bl)
+      fold_left (fun x body =>
+        fold_left (fun y ctr =>
+          let fix Ffix args e y :=
+            match args with
+            | [] => y
+            | arg :: l =>
+              update_kp_util NoSave arg.(decl_name) e
+                (aux arg) (fun e => Ffix l e y)
             end in
-            Ffix (rev ctr.(cstr_args)) e bl
-        ) bl' body.(ind_ctors))
-      res ty.(ind_bodies)
-    )
-  .
+          Ffix (rev ctr.(cstr_args)) e y) body.(ind_ctors) x
+      ) ty.(ind_bodies) init
+    ).
+
+
+Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool :=
+  let npars := length ty.(ind_params) in
+  let init := repeat true npars in
+  let fix aux argtype e bl: list bool:=
+    match argtype with
+    | tApp (tRel i) tl =>
+      match is_recursive_call_gen e i with
+      | Some _ =>
+        and_listbool bl
+          (mapi (
+            fun i t =>
+              match t with
+              | tRel k =>
+                  if tRel k == (geti_info "params" e (npars-1-i))
+                  then true else false
+              | _ => false end
+            ) (firstn npars tl))
+      | None => bl
+      end
+    | tProd na t1 t2 =>
+        update_kp_util NoSave na e (fun e y => y) (fun e => aux t2 e bl)
+    | _ => bl end
+  in
+  visit_args kn ty init (fun arg e x => aux arg.(decl_type) e x).
 
 Definition thisfile := $run (tmCurrentModPath tt).
 

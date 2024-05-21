@@ -6,18 +6,22 @@ Import bytestring.
 MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
 Print indp_nat.
 
+(* Require Import MetaCoqPrelude. *)
+
 Inductive myvec (A:Type) : nat -> Type :=
  | myvnil : myvec A 0
  | myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
 (* Definition thisfile := $run (tmCurrentModPath tt).
 Definition input := ($run (tmQuoteInductive (thisfile, "myvec"))).
-Compute (GenerateIndp_mutual (thisfile, "myvec") input). *)
+Definition output := (GenerateIndp_mutual (thisfile, "myvec") input).
+Goal closed output = true.
+  unfold closed, output.
+  simpl. auto.
+Qed. *)
 MetaCoq Run Derive InductivePrinciple myvec as "indp_myvec".
 Print indp_myvec.
-Print myvec_ind.
-
-
-
+(* MetaCoq Run PrintInductivePrinciple myvec. *)
+(* Print myvec_ind. *)
 (* Print myvec_ind. *)
 
 Inductive myvec2 (A:Type) : nat -> Type :=
