@@ -1,4 +1,4 @@
-Require Import BasePrelude.
+Require Import MetaCoq.Programming.BasePrelude.
 Require Import param_checker.
 Global Open Scope bs.
 

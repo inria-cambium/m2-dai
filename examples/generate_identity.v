@@ -1,4 +1,4 @@
-Require Import BasePrelude.
+Require Import MetaCoq.Programming.BasePrelude.
 
 (* From MetaCoq Require Export bytestring. *)
 Global Open Scope bs.

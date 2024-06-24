@@ -1,9 +1,13 @@
--Q . ""
+-Q theories MetaCoq
 
-BasePrelude.v
-MetaCoqPrelude.v
-generate_identity.v
-param_checker.v
-generate_inductive_principle.v
-test_identity.v
-test_inductive_principle.v
+theories/MetaCoqPrelude.v
+theories/Programming/BasePrelude.v
+
+
+-Q examples ""
+examples/generate_identity.v
+examples/test_identity.v
+
+examples/param_checker.v
+examples/generate_inductive_principle.v
+examples/test_inductive_principle.v

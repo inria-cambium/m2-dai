@@ -1,4 +1,4 @@
-Require Export MetaCoqPrelude.
+Require Export MetaCoq.MetaCoqPrelude.
 Export MCMonadNotation.
 Export List.
 Export ListNotations.

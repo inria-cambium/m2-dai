@@ -1,4 +1,4 @@
-Require Import BasePrelude.
+Require Import MetaCoq.Programming.BasePrelude.
 
 Definition and_listbool (l:list bool) (l':list bool) :=
   map2 (fun a b => andb a b) l l'.
