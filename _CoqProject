@@ -2,7 +2,7 @@
 
 theories/MetaCoqPrelude.v
 theories/Programming/BasePrelude.v
-
+theories/Programming.v
 
 -Q examples ""
 examples/generate_identity.v
