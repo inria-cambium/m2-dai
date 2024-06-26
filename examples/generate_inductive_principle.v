@@ -1,11 +1,9 @@
 Require Import MetaCoq.Programming.
-Require Import param_checker.
 Global Open Scope bs.
 
 (*This is an example of using BasePrelude:
-  generate the type of inductive principle of any inductive type*)
+  generate the type of induction principle of any inductive type*)
 
-Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 
 Definition the_name := {| binder_name := nNamed "x"; binder_relevance := Relevant |}.
 Definition prop_name := {| binder_name := nNamed "P"; binder_relevance := Relevant |}.
@@ -17,42 +15,6 @@ Fixpoint n_tl {A} (l:list A) n :=
   | S n => List.tl (n_tl l n)
   end
 .
-
-(*seperating the list of parameters into "uniform params" and "non-uniform params"*)
-(*for inductive principle, "non-uniform parameter" is treated the same way as index (different from uniform)*)
-(*the function below just find the first non-uniform param and split the list,
-  the params after the first non-uniform one are regarded as if they are not uniform        *)
-Definition SeperateParams (kn:kername) (ty:mutual_inductive_body) :=
-  let findi {X} (f: X -> bool) (l:list X) :option nat :=
-    let fix Ffix l n:=
-      match l with
-      | [] => None
-      | y :: l' => if f y then Some n else Ffix l' (n+1)
-      end
-    in
-    Ffix l 0 in
-  let params := ty.(ind_params) in
-  let bl := CheckUniformParam kn ty in
-  match findi (fun b => negb b) bl with
-  | None => (params, [])
-  | Some i => (skipn (length params - i) params, firstn (length params - i) params)
-  end.
-
-(* Definition SeperateParams2 (kn:kername) (ty:mutual_inductive_body) :=
-  let params := ty.(ind_params) in
-  let bl := CheckUniformParam kn ty in
-  let fix Ffix l1 l2 (bl:list bool) :=
-    match bl with
-    | [] => (l1, l2)
-    | b :: bl => if b then Ffix (b :: l1) l2 bl else Ffix l1 (b :: l2) bl
-    end
-  in
-  Ffix [] [] (rev bl). *)
-
-
-Notation " x '<-' c1 ';;' c2" := ( c1 (fun x => c2))
-  (at level 100, c1 at next level, right associativity) : monad_scope.
-
 
 (*works for inductive type not mutual inductive*)
 Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
@@ -67,13 +29,13 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
 
   (*for each constructor cstr in [b], generate a term (ti)*)
   (*returns t1 -> t2 -> ... tk -> [t e_updated]*)
-  let aux (e:extrainfo) (b:list constructor_body) (t:extrainfo -> term) :term :=
-    let fix Ffix e b (t:extrainfo -> term) i :=
+  let aux (e:infolocal) (b:list constructor_body) (t:infolocal -> term) :term :=
+    let fix Ffix e b (t:infolocal -> term) i :=
 
       (* for each type constructor *)
       (* take Vector.t, 'cons : A -> forall n:nat, vec A n -> vec A (S n)' for example *)
       (* ~~~~> forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons a n v) *)
-      let auxctr (e:extrainfo) (ctr:constructor_body) i : term :=
+      let auxctr (e:infolocal) (ctr:constructor_body) i : term :=
         let constructor_current := tConstruct the_inductive i [] in
         let cstr_type := ctr.(cstr_type) in
         (*get the return type of the type constructor*)
@@ -88,7 +50,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         (*transforme the return type of constructor*)
         (*'cons : ... -> vec A (S n)'   ~~~>   P (S n) (cons A a n v)
                           ^^^^^^^^^^                                *)
-        let transformer_result (t:term) :extrainfo -> term := fun e =>
+        let transformer_result (t:term) :infolocal -> term := fun e =>
           match t with
           | tApp (tRel i) tl =>
             (*check that the return type of the constructor is exactly the type which we are defining*) (*vec*)
@@ -124,7 +86,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
           (*A ~~~> forall (a:A) -> [t] *)
           (*forall (n:nat) ~~~> forall (n:nat) -> [t]*)
           (*vec A n ~~~> forall (v:vec A n) -> P n v -> [t] *)
-        let auxarg arg (t:extrainfo -> term) :extrainfo -> term :=
+        let auxarg arg (t:infolocal -> term) :infolocal -> term :=
           let t1 := arg.(decl_type) in
           let na := arg.(decl_name) in
           fun e =>
@@ -202,7 +164,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                   t
           end
         in
-        let transformer_args args (t:term): extrainfo -> term :=
+        let transformer_args args (t:term): infolocal -> term :=
           fold_right (
             fun arg t => auxarg arg t
             ) (transformer_result t) args
@@ -284,9 +246,9 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
   let n_ind := length ty.(ind_bodies) in
   let (params, no_uniform_params) := SeperateParams kername ty in
 
-  let aux (e:extrainfo) (b:list constructor_body) (j:nat) (t:extrainfo -> term) :term :=
-    let fix Ffix e b (t:extrainfo -> term) i :=
-      let auxctr (e:extrainfo) (ctr:constructor_body) i : term :=
+  let aux (e:infolocal) (b:list constructor_body) (j:nat) (t:infolocal -> term) :term :=
+    let fix Ffix e b (t:infolocal -> term) i :=
+      let auxctr (e:infolocal) (ctr:constructor_body) i : term :=
         let constructor_current :=
           tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
         let cstr_type := ctr.(cstr_type) in
@@ -297,7 +259,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
             | _ => t
             end ) cstr_type
         in
-        let transformer_result (t:term) :extrainfo -> term := fun e =>
+        let transformer_result (t:term) :infolocal -> term := fun e =>
           match t with
           | tApp (tRel i) tl =>
             match is_recursive_call_gen e i with
@@ -325,7 +287,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
             end
           | _ => todo end (*must be an error*)
         in
-        let auxarg arg (t:extrainfo->term) :extrainfo -> term :=
+        let auxarg arg (t:infolocal->term) :infolocal -> term :=
           let t1 := arg.(decl_type) in
           let na := arg.(decl_name) in
           fun e =>
@@ -407,7 +369,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                   t
           end
         in
-        let transformer_args args (t:term): extrainfo -> term :=
+        let transformer_args args (t:term): infolocal -> term :=
           fold_right (
             fun arg t => auxarg arg t
             ) (transformer_result t) args
@@ -461,19 +423,6 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
       )
   .
 
-
-
-
-
-
-Notation "'$let' x ':=' c1 'in' c2" := (@bind _ _ _ _ c1 (fun x => c2))
-                                     (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
-
-Notation "'try' '$let' ' x ':=' c1 'in' c2 'else' c3" := (@bind _ _ _ _ c1 (fun y =>
-                                                              (match y with x => c2
-                                                                       | _ => c3
-                                                               end)))
-                                         (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
 
 Definition kn_myProjT2 :=
   (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], "my_projT2").

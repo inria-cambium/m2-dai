@@ -6,17 +6,11 @@ Global Open Scope bs.
 Definition the_name := {| binder_name := nNamed "x";
                   binder_relevance := Relevant  |}.
 
-Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
-
-
-Notation " x '<-' c1 ';;' c2" := ( c1 (fun x => c2))
-                                     (at level 100, c1 at next level, right associativity) : monad_scope.
-
 Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
 
   let params := ty.(ind_params) in
   let n_ind := length ty.(ind_bodies) in
-  let initial_info : extrainfo :=
+  let initial_info : infolocal :=
     let e := make_initial_info na ty in
     add_info_names e "rels_of_id"
       (map (fun ind_body => {| binder_name := nNamed "id";
@@ -29,7 +23,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
     let the_inductive := {| inductive_mind := na; inductive_ind := i |} in
     let indices := body.(ind_indices) in
 
-    let aux : extrainfo -> Nat.t -> constructor_body -> (context * (extrainfo -> term)) := fun e i b =>
+    let aux : infolocal -> Nat.t -> constructor_body -> (context * (infolocal -> term)) := fun e i b =>
       (b.(cstr_args),
        fun e =>
 
@@ -64,7 +58,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   end
                 | tProd _ _ _ =>
                   (***********)
-                  let fix transformer (t:term) e (u:extrainfo -> term) :term :=
+                  let fix transformer (t:term) e (u:infolocal -> term) :term :=
                     match t with
                     | tProd na t1 t2 =>
                       kptLambda (Savelist "arglambda") na e
@@ -95,7 +89,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   (***********)
                 | _ => arg_current end
               in
-              map_with_extrainfo_arg auxarg b.(cstr_args) e)
+              map_with_infolocal_arg auxarg b.(cstr_args) e)
             )
           )
           )
@@ -140,21 +134,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 
 
 (* Print TemplateMonad. *)
-
-Notation "'$let' x ':=' c1 'in' c2" := (@bind _ _ _ _ c1 (fun x => c2))
-                                     (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
-
-Notation "'try' '$let' ' x ':=' c1 'in' c2 'else' c3" := (@bind _ _ _ _ c1 (fun y =>
-                                                              (match y with x => c2
-                                                                       | _ => c3
-                                                               end)))
-                                         (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
-
 Definition kn_myProjT2 :=
   (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], "my_projT2").
-
-(* MetaCoq Test Quote nat. *)
-(* Definition *)(* Eval *)(* Lemma *)(* Instance *)(* Print *)(* Compute *)(* Check *)
 
 Definition generate_identity {A} (a : A) (out : option ident): TemplateMonad unit :=
   $let t := tmQuote a in

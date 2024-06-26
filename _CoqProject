@@ -2,12 +2,12 @@
 
 theories/MetaCoqPrelude.v
 theories/Programming/BasePrelude.v
+theories/Programming/ParamChecker.v
 theories/Programming.v
 
 -Q examples ""
+examples/test_param_checker.v
 examples/generate_identity.v
 examples/test_identity.v
-
-examples/param_checker.v
 examples/generate_inductive_principle.v
 examples/test_inductive_principle.v
