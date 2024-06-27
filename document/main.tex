@@ -1,0 +1,722 @@
+\documentclass[a4paper,UKenglish,cleveref, autoref, thm-restate]{lipics-v2021}
+
+\bibliographystyle{plainurl}% the mandatory bibstyle
+
+\title{Dummy title} %TODO Please add
+
+\usepackage{xcolor}
+\usepackage{coq}
+\usepackage{indentfirst}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+%TODO mandatory: add short abstract of the document
+
+\section{Introduction}
+% Coq is a proof assistant. It is designed to develop mathematical proofs, and especially to write formal specifications, programs and proofs that programs comply to their specifications. 
+
+
+
+MetaCoq \cite{metacoq} is a project providing tools for manipulating Coq terms and developing certified plugins (i.e. translations, compilers or tactics) in Coq.
+
+In MetaCoq one can write meta-programs, such as a program which derives the induction principle of any inductive type, one can then prove that the result of the program is well-typed or has other semantic properties.
+
+Instead of proving these properties after the fact, it would be interesting to immediately provide such guarantees at the time of implementing the meta-programs, e.g. via a type of well-typed terms or well-scoped Coq syntax.
+
+This project aims at using several approaches to define such types with guarantees for the user, compare and contrast them, and implement case studies using them.
+
+Which can be used as basis for meta-programming of tactics and commands, to prove meta-theoretic properties of the type theory of Coq such as subject reduction, and to verify programs crucial in the implementation of Coq such as type checking or extraction.
+
+\subsection{Template-Coq}
+% (for plugins or tactics) based on raw, untyped syntax of Coq terms
+
+At the center of MetaCoq is the Template-Coq quoting library for Coq. It takes Coq terms and constructs a representation of their syntax tree as an inductive data type. The representation is based on the kernel's term representation.
+
+For example, the MetaCoq quotes the function \coqe{(fun (x:nat) => x)} to 
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+tLambda {| binder_name := nNamed "x"; binder_relevance := Relevant |} (*name of variable*)
+         (tInd
+            {|
+              inductive_mind := (MPfile ["Datatypes"; "Init"; "Coq"], "nat");
+              inductive_ind := 0
+            |} [])  (*type of variable*)
+        (tRel 0) (*body*)
+     : term    
+\end{lstlisting}
+
+The MetaCoq also provides tool to unquote the term above back to \coqe{(fun (x:nat) => x)}.
+
+In the example above, the body of the lambda abstraction is represented by \coqe{tRel 0}, which is exactly the de Bruijn index\cite{wikidebruijn}. The quotation of MetaCoq uses pure de Bruijn indices as the binder. The de Bruijn index is used in the kernel of Coq, it is one reason why MetaCoq chooses this binder.
+
+
+\subsection{de Bruijn index}
+De Bruijn index is a tool invented for representing terms of lambda calculus without naming the bound variables. Each de Bruijn index is a natural number that represents an occurrence of a variable in a $\lambda$-term, and denotes the number of binders that are in scope between that occurrence and its corresponding binder. For example, the lambda term $\lambda x \lambda y. y$ is represented by $\lambda \lambda 0$, where the $0$ represents the closest binder. 
+
+Let us look at a more complicated example, for the inductive type:
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Inductive vec (A:Type) : nat -> Type :=
+ | nil : vec A (Nat.O)
+ | cons (a:A) : forall (n:nat), vec  A  n -> vec A (S n).
+                                ^^  ^^
+\end{lstlisting}\label{vec}
+
+Its quotation in MetaCoq looks like (\coqe{&_} means the de Bruijn index):
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Inductive vec (_:Type) : nat -> Type :=
+ | nil : &1 &0 (Nat.O)
+ | cons : &0 -> forall (_:nat), &3 &2 &0 -> &4 &3 (S &1).
+                                ^^ ^^
+\end{lstlisting}
+
+For the underlined "\coqe{vec}" above, there are 4 binders that can be referenced, i.e. \coqe{n, a, A, vec}, their de Bruijn indices are \coqe{0, 1, 2, 3}, since here we need to represent \coqe{vec}, it should be represented by \coqe{&3}. For the same reason, the "\coqe{A}" noted above is represented by \coqe{&2}.
+
+Using MetaCoq to write meta-programs, the user does not only need to know how the induction principle should be formed, but also must have a good command of de Bruijn index. In order to write meta-programs by MetaCoq, the calculation of de Bruijn indices can be complicated and error-prone. 
+
+For example, we can write a program to derive the induction principle of any inductive type. The induction principle of the vector defined above is:
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+forall (A:Type), forall (P: forall (n:nat), vec A n -> Prop),
+  P 0 (nil A) -> (forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons A a n v)) ->
+    forall (n:nat) (x:vec A n), P n x.
+                                ^ 
+\end{lstlisting}
+
+Whose quotation looks like:
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+forall (_:Type), forall (_: forall (_:nat), vec &1 &0 -> Prop),
+  &0 (Nat.O) (nil &1) -> 
+  (forall (_:&2) (_:nat) (_:vec &4 &0), &4 &1 &0 -> &5 (S &2) (cons &6 &3 &2 &1)) ->
+    forall (_:nat) (_:vec &4 &0), &4 &1 &0.
+\end{lstlisting}
+
+If we compute each de Bruijn index directly, for the last \coqe{"P"} appears in the induction principle, its de Bruijn index should be equal to (number of type constructors) + (number of indices of type) + 1, i.e. $2 + 1 + 1 = 4$. Similar calculation is inevitable for each de Bruijn index. If we just compute each index in this nutural way, it will be error-prone and laborious.
+
+
+
+% For example, for the definition \coqe{vec} above, when using MetaCoq to define this type, the de Bruijn index of each \coqe{vec}(except the first one) must be calculated, and such calculation appears everywhere. So the calculation of de Bruijn index is really a burden for the users of MetaCoq.
+
+\subsection{First approach}
+Due to the cumber of calculation of de Bruijn index, one aspect of this project is to propose an approach to avoid directly using the de Bruijn index during programming MetaCoq and so that reduces the difficulty of meta-programming through MetaCoq.
+
+
+
+
+% Which can be used as basis for meta-programming of tactics and commands, to prove meta-theoretic properties of the type theory of Coq such as subject reduction, and to verify programs crucial in the implementation of Coq such as type checking or extraction.
+
+
+
+
+
+\section{Approach}
+
+Currently, this approach is limited on generating function/type from the inductive type definition. We will take the generation of (type of) induction principle of inductive type as an example to illustrate this approach. With this approach, the user needs to know very little knowledge of de Bruijn index.
+
+
+
+\subsection{Basic idea}
+
+
+% The general inductive type definition(not mutual) is:
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Inductive T (P_1:Param_1) ... (P_k:Param_k) : Ind_1 -> ... -> Ind_m :=
+% | Cstr (arg_1:?) ... (arg_n:?) : T P_1 ... P_k (?) ... (?)
+% ...
+% \end{lstlisting}
+
+% Now our template can be used to generate the type of induction principle, like:
+
+% \coqe{ nat => forall P:nat->Prop, (P 0) -> (forall n, P n -> P (S n)) -> forall n:nat, P n}.
+
+The idea to avoid direct calculation of De Bruijn index is to carry a local information during the generation, which includes the correct De Bruijn indices of some binders and other important information, the local information will be updated implicitly or explicitly during the generation.
+
+In the subsection below, some important type structures and several necessary functions will be explained.
+
+
+\subsection{Documentation}
+
+The type \coqe{term} below is the \coqe{term} defined in the MetaCoq, i.e. \coqe{MetaCoq.Template.Ast.term}.
+
+
+
+\subsubsection{base}
+\begin{itemize}
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Inductive information : Type :=
+  | information_list (l : list (BasicAst.context_decl term))
+  | information_nat (n : nat).
+
+Record infolocal : Type := mkinfo {
+  renaming : list (BasicAst.context_decl nat);
+  info : list (string * information) ;
+  info_source : list (string * information) ;
+  kn : kername; }.    
+\end{lstlisting}
+The local information. For simplicity of explication, we will regard \coqe{renaming, information_list} as a list of natural numbers in the rest.
+
+% it should be used at the beginning. This function only add the information of type name to the infolocal, for example: 
+
+% \coqe{Inductive ntree (A:Type) :Type:= ... with nforest (A:Type) :Type =... .}
+% If the \coqe{ty} is this type, then the result should contains a \coqe{(information_list "rels_of_T" [0;1])}, which means that \coqe{nforest} is \coqe{tRel 0}, \coqe{ntree} is \coqe{tRel 1}.
+
+% \item
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Definition add_info_names (e:infolocal) (str:string) (names:list aname) :infolocal
+% \end{lstlisting}
+% add an \coqe{(information_list str l)} to \coqe{e.(info)} where \coqe{l} is defined as 
+
+% \coqe{mapi (fun i x => mkdeclnat x None i) names}.
+
+% This function is used to create the initial local information, but should only be used when \coqe{make_initial_info} does not suffice.
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Inductive saveinfo:=
+  | Savelist (s:string)
+  | Saveitem (s:string)
+  | NoSave.
+\end{lstlisting}
+Indicator used in some function, indicates whether new information will be saved into the \coqe{info} field of local information and in which format the new information will be saved. 
+% (\coqe{information_list} or \coqe{information_nat}).
+
+
+
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition geti_info (na:string) (e:infolocal) (i:nat) : term
+\end{lstlisting}
+Get the \coqe{information_list} named \coqe{na} of \coqe{e.(info)}, and get its ith element \coqe{k}, return \coqe{tRel k}.
+
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition rels_of (na:string) (e:infolocal): list term
+\end{lstlisting}
+Get the \coqe{information_list} named \coqe{na} of \coqe{e.(info)}, reverse and transform it to a 
+list of \coqe{tRel _} term.
+
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition rel_of (na:string) (e:infolocal): term
+\end{lstlisting}
+Get the \coqe{information_nat} named \coqe{na} of \coqe{e.(info)}, and get its value \coqe{k}, return \coqe{tRel k}.
+
+
+
+
+% For example, 
+
+% \coqe{Inductive vec (A:Type):nat -> Type:= ... cons : A -> forall (n:nat), vec A n -> vec A (S n)}, the \coqe{vec} of \coqe{vec A n} is represented by \coqe{tRel 3} in the quotation. If we make good use of our method, the local information \coqe{e} should always be updated correctly, when we call this function at this point (\coqe{vec}) with \coqe{e,3}, the result will be \coqe{Some 0}.
+
+
+
+\end{itemize}
+
+
+\subsubsection{inductive type}
+Some functions for the case when the source is the inductive type definition.
+\begin{itemize}
+
+\item 
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition make_initial_info (kn:kername) (ty:mutual_inductive_body):infolocal
+\end{lstlisting}
+
+Initialize the local information.
+
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition is_recursive_call_gen (e:infolocal) (i:nat) : option nat
+\end{lstlisting}
+For a local information \coqe{e}, by checking \coqe{e.(info_source)}, see whether \coqe{(tRel i)} refers to the type name of one inductive body of the source. In the example above of \coqe{vec}$_{\ref{vec}}$, the underlined "vec" refers exactly to the type name.
+
+
+If \coqe{(tRel i)} refers to the type name of the $k$th inductive body, return \coqe{Some k}; Otherwise, return \coqe{None}.
+
+
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition type_rename_transformer (e:infolocal) (t:term) : term
+\end{lstlisting}
+Renaming transformation, transform the term \coqe{t} according to the renaming map. i.e. for each subterm \coqe{(tRel i)} of \coqe{t},
+use the former function to check if it refers to the type name, if it is the case, maps it to the term of the type (a tInd term); otherwise, maps it to \coqe{(geti_rename e i)}. 
+
+\end{itemize}
+
+
+\subsubsection{term generation}
+\begin{itemize}
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition mktProd (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+    (t1:term) (t2:infolocal -> term): term
+\end{lstlisting}
+Produce a Prod term, namely \coqe{(forall (na:t1), _)}.
+\begin{itemize}
+    \item \coqe{saveinfo}: whether save the information of new variable into \coqe{e}
+    \item \coqe{na}: the aname of the new variable
+    \item \coqe{e}: the local information
+    \item \coqe{t1}: the type of variable
+    \item \coqe{t2}: the body (need to be fed with a local information)
+\end{itemize}
+% i.e. the result will be \coqe{Prod na (t1 e) (t2 ((update e))} where \coqe{update e} will save the new variable according to \coqe{saveinfo} and update the local information.
+
+% The user does not need to know update
+
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition kptProd (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+    (t1:term) (t2:infolocal -> term): term
+\end{lstlisting}
+Similar to the former one, but for different usage.
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition it_kptProd (saveinfo:option string) (ctx:context) (e:infolocal) 
+    (t: infolocal -> term): term
+\end{lstlisting}
+Iterative version of \coqe{kptProd}.
+When \coqe{ctx} $\approx$ \coqe{[vk; ... v2; v1]}, the result will be like:
+\coqe{(forall (_:v1) (_:v2) ... (_:vk), _)}. (need to transform these types by renaming transformation)
+\begin{itemize}
+    \item \coqe{saveinfo}: whether save the information of the new variables into \coqe{e}
+    \item \coqe{ctx}: the list of the new variables
+    \item \coqe{e}: the local information
+    \item \coqe{t}: the body (need to be fed with a local information)
+\end{itemize}
+
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition it_mktProd (saveinfo:option string) (ctx:context) (e:infolocal) 
+    (t: infolocal -> term) :term
+\end{lstlisting}
+iterative version of \coqe{mktProd}.
+
+
+
+
+\begin{remark}\label{choosetProd}
+How to use \coqe{mktProd, kptProd} ?
+
+Simply speaking, when creating a Prod term,
+
+\begin{itemize}
+    \item use \coqe{(kptProd saveinfo na e t1 t2)} if \coqe{na} refers to a binder, or say a term that could be referenced(by \coqe{tRel _}) in the source
+    \item otherwise, or say when the new variable does not occur in the source, use \coqe{mktProd} 
+\end{itemize}
+
+  
+
+  For example, for a general inductive type:
+
+\coqe{Inductive T (P_1:Param_1) ... (P_k:Param_k) : Ind_1 -> ... -> Ind_m :=...}
+
+The type of its induction principle is:
+
+\coqe{forall (P_1:Param_1) ... (P_k:Param_k),}
+
+~~\coqe{forall (P: forall (i_1:Ind_1)  ... (i_m:Ind_m): T P_1 ... P_k i_1 ... i_m -> Prop), ...... }
+
+When handle the parameters, since the parameters can be referenced in the source, use \coqe{kptProd}, but for \coqe{i_1, ... i_m} which do not occur in the source, use \coqe{mktProd}. See more concrete code in the section of case study.
+\end{remark}
+
+
+\item
+Similar functions for \coqe{Lambda} instead of \coqe{Prod} as follow:
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition mktLambda (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+    (t1:term) (t2:infolocal -> term): term
+Definition kptLambda (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+    (t1:term) (t2:infolocal -> term): term
+Definition it_kptLambda (saveinfo:option string) (ctx:context) (e:infolocal) 
+    (t: infolocal -> term): term
+Definition it_mktLambda (saveinfo:option string) (ctx:context) (e:infolocal) 
+    (t: infolocal -> term): term
+\end{lstlisting}
+
+    
+\end{itemize}
+
+% \item
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Definition fancy_tCase ...
+% \end{lstlisting}
+
+
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Definition 
+% \end{lstlisting}
+
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Definition 
+% \end{lstlisting}
+
+\end{itemize}
+
+
+\subsection{Implementation}
+
+In this section, we will explain how to implement several important functions and type structures, and the idea behind that. Without notice, we will always consider the generation of induction principle of inductive type, we will use the word "source" to indicate the definition of inductive type, and the "target" to mean what we are going to generate.
+
+% So now the core problem for us is to have a good design of local information and make sure how to update it.
+\subsubsection{local information}
+Remind the definition of local information:
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Record infolocal : Type := mkinfo {
+  renaming : list (BasicAst.context_decl term);
+  info : list (string * information) ;
+  info_source : list (string * information);
+  kn : kername;
+}.    
+
+Inductive information : Type :=
+  | information_list (l : list (BasicAst.context_decl nat))
+  | information_nat (n : nat).
+\end{lstlisting}
+
+The field \coqe{info} is designed to save the de Bruijn indices (in the target environment). For example, we can save a binder as \coqe{(name, information_nat 0)} into the \coqe{info} once, then if we update the local information correctly during the term generation, later at the time when we want to refer to this binder, we can just use \coqe{(rel_of name e)} to get it. The typical \coqe{information_list} includes parameters, indices, arguments... 
+
+The field \coqe{info_source} is used to save the de Bruijn indices of binders in the source environment. For example, save the de Bruijn index of the type, in our example of vec $ _{\ref{vec}}$, we need to save the de Bruijn index of the type name "vec".
+
+When using this approach to generate term from an inductive type, the generation process can be seen as a consecutive process of reading the source and writing the target, usually we do both at the same time. The \coqe{info} should be updated every time we produce a binder in the target, the \coqe{info_source} should be updated every time we read a binder in the source.
+% During the process of generation, the update of de Bruijn index is different for \coqe{info_source} and \coqe{info}.
+
+The \coqe{renaming} is invisible to users, it can be seen as a map (of de Bruijn index) from source to target. 
+
+The ith (begin with $0$th) element of \coqe{renaming} is \coqe{t} means:
+the \coqe{&i} in the source environment should be expressed by \coqe{t} in the target environment. See the explication below:
+
+Let us look at the example to illustrate the meaning of \coqe{renaming} and how should it change during the generation. For \coqe{vec} $_{\ref{vec}}$, its induction principle is:
+
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+forall (A:Type), forall (P: forall (n:nat), vec A n -> Prop),
+  P 0 (nil A) -> (forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons A a n v)) ->
+    forall (n:nat) (x:vec A n), P n x.
+\end{lstlisting}
+
+When generating the induction principle, the generation can be visualized. For each step, $\bullet$ in the source is just after the term that we read at this step, $\bullet$ in the target is after the term generated at this step, the \coqe{renaming, info, info_source} show the value of these fields at the end of this step:
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Source:
+    Inductive vec $\bullet$ (A:Type) 
+Target:
+renaming: [vec] (*tInd _ _ *)
+info: [ ]
+info_source: [ ("type", information_nat 0)] (*i.e. "vec" *)
+\end{lstlisting}
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Source:
+    Inductive vec (A:Type) $\bullet$
+Target:
+    forall (_:Type), $\bullet$
+renaming: [ &0; vec ]
+info: [("parameters", information_list [0])]
+info_source: [("type", information_nat 1)]
+\end{lstlisting}
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Source:
+    Inductive vec (A:Type): nat -> Type $\bullet$ :=
+Target:
+    forall (_:Type), (forall _: forall (_:nat), $\bullet$),
+renaming: [ &1; vec ]
+info: [("parameters", information_list [1])]
+info_source: [("type", information_nat 1)]  
+\end{lstlisting}
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Source:
+    Inductive vec (A:Type): nat -> Type $\bullet$ :=
+Target:
+    forall (_:Type), (forall _: forall (_:nat), vec &1 $\bullet$ -> ...)
+renaming: [ &1; vec ]
+info: [("parameters", information_list [1])]
+info_source: [("type", information_nat 1)]
+\end{lstlisting}
+
+
+
+At the first step, we just start the generation, the \coqe{renaming} contains only the \coqe{vec}. At the second step, we read the parameter `\coqe{(A:Type)}', produce a Prod term \coqe{(forall (_:Type), _)}, after that, the \coqe{renaming} is updated to \coqe{[&0; vec]}. At the third step, we read the indice \coqe{nat}, produce a Prod term \coqe{(forall (n:nat), ...)}, and update \coqe{renaming} to \coqe{[&1; vec]}, which means that the \coqe{&0} of source (i.e. \coqe{A}) corresponds exactly to the \coqe{&1} of target.
+
+% At the first and the second step, we produce the part `\coqe{forall (A:Type)}' when we just read the parameter `\coqe{(A:Type)}' of the type definition, the \coqe{renaming} is empty at this point and updated to \coqe{[0]} later.
+% The second part is generated when all indices of the type are read, at the point when we create the term \coqe{(vec A n)}, the \coqe{renaming} is \coqe{[1]} (it has been updated since we introduce a new variable \coqe{(n:nat)}), which means that the \coqe{&0 (A)} in the type definition is exactly \coqe{&1} in the target environment.
+
+\subsubsection{update the local information}
+As we know, \coqe{infolocal} is the local information that should be carried during the whole process of generation. It is crucial that the local information is updated correctly at any point of the generation.
+
+The definition of \coqe{kptProd} is:
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition kptProd (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+  (t1:term) (t2:infolocal -> term): term :=
+  let e' := update_kp na e saveinfo in
+  tProd na t1 (t2 e').
+\end{lstlisting}
+
+Where an update function is used.
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo): infolocal.
+\end{lstlisting}
+
+As mentioned before$_{\ref{choosetProd}}$, \coqe{kptProd} is used for creating a prod term when the variable "na" refers to a binder in the source. As we create the prod term, we add a variable, we must update the \coqe{infolocal} for the body of the abstraction.
+
+
+
+
+
+\coqe{update_kp} does following things:
+\begin{itemize}
+    \item update the \coqe{renaming}: add each element of \coqe{renaming} by one, and add an value \coqe{0} to the head of the list.
+    \item update the \coqe{info, info_source}: for each \coqe{information_list}, add each element by 1; for each \coqe{info_nat}, add its value by one.
+    \item According to the \coqe{saveinfo}
+    \begin{itemize}
+        \item \coqe{NoSave}, do nothing.
+        \item \coqe{Savelist str}, add a new item of value \coqe{0} to the head of \coqe{information_list} named \coqe{str} of \coqe{info}.
+        \item  \coqe{Saveitem str}, add \coqe{(str, information_nat 0)} to the \coqe{info}.
+    \end{itemize}
+\end{itemize}
+
+
+The only difference between \coqe{mktProd} and \coqe{kptProd} is that it uses \coqe{update_mk} instead of \coqe{update_kp}.
+
+\coqe{update_mk} updates the local information a little differently:
+\begin{itemize}
+    \item update the \coqe{renaming}: add each element of \coqe{renaming} by one.
+     \item update the \coqe{info}: for each \coqe{information_list}, add each element by 1; for each \coqe{info_nat}, add its value by one.
+     \item remain the \coqe{info_source} unchanged.
+     \item according to \coqe{Saveinfo}, does the same thing as defined in \coqe{update_kp}.
+\end{itemize}
+
+The reason of the difference between these two update function is that: \coqe{kptProd} is used for variable that could be referenced in the source, but \coqe{mktProd} is used for creating a variable(which does not appear in the source), see Remark \ref{choosetProd}. So when we use \coqe{mktProd}, the "reading context", the \coqe{info_source} should be unchanged, the number of items in \coqe{renaming} should remain the same, but each element of \coqe{renaming} will be added by one since we produce a new variable there.
+
+\section{Case study}
+
+
+In this section, we will show how this approach works by an example: generating the type of induction principle of an inductive type. In the code below, $\overrightarrow{p:Param}$ is the list of parameters, $\overrightarrow{Ind}$ is the list of type of indices, $\overrightarrow{arg}$ is the list of arguments. 
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Inductive T $\overrightarrow{p:Param}$: $\overrightarrow{Ind}$ -> Type :=
+  | Cstr $\overrightarrow{arg}$ : T $\overrightarrow{p}$ (?) ... (?)
+  ...
+\end{lstlisting}
+
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Inductive T $\overrightarrow{P_i:Param_i}$(P_1:Param_1) ... (P_k:Param_k) : Ind_1 -> ... -> Ind_m -> Type :=
+%   | Cstr (arg_1:?) ... (arg_n:?) : T P_1 ... P_k (?) ... (?)
+% ...
+% \end{lstlisting}
+
+generation $\Longrightarrow$
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+forall $\overrightarrow{p:Param}$,
+    forall (P: forall $\overrightarrow{i:Ind}$, T $\vec{p}$ $\vec{i}$ -> Prop)
+        (...) (depends on the constructors)
+        forall $\overrightarrow{i:Ind}$ (x:T $\vec{p}$ $\vec{i}$), P $\vec{i}$ x.
+\end{lstlisting}
+
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% forall (P_1:Param_1) ... (P_k:Param_k),
+%     forall (P: forall (i_1:Ind_1) ... (i_m:Ind_m), T P_1 ... P_k i_1 ... i_m -> Prop)
+%         (...) (depends on the constructors)
+%         forall (i_1:Ind_1) ... (i_m:Ind_m) (x:T P_1 ... P_k i_1 ... i_m), P i_1 ... i_m x.
+% \end{lstlisting}
+
+
+For simplicity of explication, we do not consider mutual inductive type.
+
+
+The main function takes the kernel name and the type definition (its quotation) as arguments and returns a term:
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term 
+\end{lstlisting}
+
+To begin the generation, build the initial local information first:
+
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
+    let initial_info :=  make_initial_info na ty in
+    (*suppose single inductive body.*)
+    let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
+    let params := ty.(ind_params) in
+    let body := getfirstbody ty.(ind_bodies) in
+    let indices := body.(ind_indices) in
+    ...
+\end{lstlisting}
+
+Then it is the time to build the \coqe{Prod} term, the following code produces the part \coqe{forall $\overrightarrow{p:Param}$, todo}. where \coqe{todo} will be developed later.
+
+% \begin{remark}
+% The parameters, indices, arguments are saved in reverse order in the quotation of a type definition. That is why we use \coqe{rev} to the parameters.
+% \end{remark}
+
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
+    ...
+    e <- it_kptProd (Some "params") params initial_info;; todo.
+\end{lstlisting}
+
+\begin{remark}
+The notation \coqe{"<- ;;"} is defined as
+
+\coqe{ (e <- c1;; c2) } $\Leftrightarrow$ \coqe{(c1 (fun e => c2))}
+\end{remark}
+
+
+Then, for the part 
+\coqe{ forall (P: forall $\overrightarrow{i:Ind}$, T $\vec{p}$ $\vec{i}$ -> Prop), ...}
+
+We introduce the variable "P" first:
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+    ...
+    e <- it_kptProd (Some "params") params initial_info;;
+    e <- mktProd (Saveitem "P") prop_name e (todo) (*type of P*);;
+    (todo) (*body of the Prod*)
+\end{lstlisting}
+
+$\Longrightarrow$
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+    ...
+    e <- it_kptProd (Some "params") params initial_info;;
+    e <- mktProd (Saveitem "P") prop_name e 
+        (e <- it_mktProd (Some "indices") indices e;;  todo);;
+    todo (*body of the Prod*)
+\end{lstlisting}
+
+$\Longrightarrow$
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+    ...
+    e <- it_kptProd (Some "params") params initial_info;;
+    e <-  mktProd (Saveitem "P") prop_name e
+        (e <- it_mktProd (Some "indices") indices e;;
+         tProd the_name
+          (tApp (tInd the_inductive []) (*T*)
+              (rels_of "params" e ++ rels_of "indices" e)) (*p i*)
+            (tSort sProp) (*Prop*)
+          );;
+    todo (*body of the Prod*)
+\end{lstlisting}
+
+We use \coqe{tProd} directly in the inner part since the type on the right side of the arrow is just \coqe{Prop}, a constant value, so no need to update the local information, we could still use \coqe{mktProd} here of course. It is important to understand each time why we use one of \coqe{(it)mktProd, (it)kptProd} but not the other, see explication in the remark_\ref{choosetProd}.
+
+Now let us produce the part 
+
+\coqe{forall $\overrightarrow{i:Ind}$, forall (x:T $\vec{p}$ $\vec{i}$), P $\vec{i}$ x.}
+
+which should be at the end of the induction principle.
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+    ...
+    e <- it_kptProd (Some "params") params initial_info;;
+    e <- mktProd (Saveitem "P") prop_name e (fun e => ... ) (*type of P*) ;;
+    ...
+     e <- it_mktProd (Some "indices") indices e;;
+     e <- mktProd (Saveitem "x") the_name e
+      (*type of x: T A1 ... Ak i1 ... im*)
+      (tApp (tInd the_inductive [])
+          (rels_of "params" e ++ rels_of "indices" e));;
+     (*P i1 ... im x*)
+     tApp (rel_of "P" e) (rels_of "indices" e ++ [rel_of "x" e])
+\end{lstlisting}
+
+Now it remains to generate the part of the type constructors. For clarity, let us take the vector for example,
+% \begin{lstlisting}[language = {Coq}, basicstyle = \small]
+% Inductive vec (A:Type) : nat -> Type :=
+%  | nil : vec A 0
+%  | cons : A -> forall (n:nat), vec A n -> vec A (S n).
+% \end{lstlisting}
+the induction principle of vector_\ref{vec}:
+
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+forall (A:Type), forall (P: forall (n:nat), vec A n -> Prop),
+  P 0 (nil A) (*generated from nil*) ->
+  (forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons A a n v)) (*from cons*) ->
+    forall (n:nat) (x:vec A n), P n x.
+\end{lstlisting}
+
+Notice that each constructor generates a term independently, we just need to link them with arrows. For specific constructor \coqe{cons}, the generation can be divided into the generation of each argument(\coqe{A, (n:nat), vec A n}), and the generation of the return type (\coqe{vec A (S n)}).
+
+The generation of each argument works as follow:
+
+\begin{itemize}
+    \item Save the argument into the local information. (will be used elsewhere)
+    \item Check the type of the argument, check if its type is exactly the one we are defining (here i.e. \coqe{vec}); if not, just do a renaming transformation; otherwise, transform its type, and build a prop type (here i.e. \coqe{P n v}) and link them.
+
+    \item link to the following term
+\end{itemize}
+
+A segment of the code is:
+
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+(*this function generate the term from the arg, and link to the term t at last*)
+let auxarg arg (t:infolocal -> term): infolocal -> term :=
+  let t1 := arg.(decl_type) in
+  let na := arg.(decl_name) in
+  fun e =>
+  match t1 with (*take arg (vec A n) for example*)
+  | tApp (tRel i) tl (*tApp `vec' `[A n]'*) =>
+    match is_recursive_call_gen e i with
+    | Some _ =>
+      (*save the argument v into information list "args"*)
+      e <- mktProd (Savelist "args") na e
+        (*type of v: vec A n*)
+        (tApp (tInd the_inductive []) (map (type_rename_transformer e) tl));;
+      (* P n v -> t*)    
+      kptProd NoSave the_name e
+        (tApp
+          (rel_of "P" e) (*P*)
+          (let tl := n_tl tl (length params) in 
+            (*do x times List.tl, i.e. remove the params*)
+            (map (type_rename_transformer e) tl) (*n*) 
+             ++ [geti_info "args" e 0] (*v*))
+        ) t
+    | None =>
+      kptProd (Savelist "args") na e
+        (type_rename_transformer e t1)
+        t
+    end
+  |...
+\end{lstlisting}
+
+
+See more details in code.
+
+
+\section{TODO}
+
+A limitation of the current approach:
+
+If one variable in the source will be "used" in the generation, then all variables that occur before it in the source should also be "used" before in the target.
+
+For example, for this type definition:
+\coqe{Inductive T (A:Type) (x:nat) (y:A) .... }
+
+We can generate the type of its induction principle as
+
+\coqe{forall (A:Type) (x:nat) (y:A) ... }
+
+But Someone may want to switch the order:
+
+\coqe{forall (x:nat) (A:Type) (y:A) ... }
+
+However, currently our approach does not allow the later one.
+
+
+\bibliography{reference}
+
+
+\end{document}
