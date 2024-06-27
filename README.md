@@ -1,11 +1,10 @@
-- BasePrelude.v: API
+- theories
+  + Programming
+    - BasePrelude.v: API
+    - ParamChecker.v: API for checking (non-)uniform parameter 
 
-- generate_inductive_principle.v: use case, generating the induction principle of inductive type
+- examples
+  + generate_inductive_principle.v: use case, generating the induction principle of inductive type
+  + generate_identity.v: use case, generating the identity function of inductive type
+  + test_identity.v, test_inductive_principle.v: test
 
-- generate_identity.v: use case, generating the identity function of inductive type
-
-- param_checker.v: check (non-)uniform parameter 
-
-- test_identity.v, test_inductive_principle.v: test
-
-- MetaCoqProgramming_1_45.pdf: document
