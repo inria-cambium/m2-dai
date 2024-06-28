@@ -303,6 +303,18 @@ Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
 (**************************************)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 (******************************  API  *******************************)
 
 (*return the tRel term of the [i]th element of the information list named [na] inside [e.(info)] *)
@@ -374,7 +386,7 @@ Definition kptProd (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
   tProd na (t1) (t2 e').
 
 (*iterate kptProd*)
-Definition it_kptProd (saveinfo:option string) (ctx:context) (e:infolocal) (t: infolocal -> term) : term :=
+Definition it_kptProd (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
   let saveinfo :=
     match saveinfo with | None => NoSave | Some str => Savelist str
   end in
@@ -385,14 +397,18 @@ Definition it_kptProd (saveinfo:option string) (ctx:context) (e:infolocal) (t: i
         Ffix ctx' e (
           fun e =>
             kptProd saveinfo decl.(decl_name) e
-              (type_rename_transformer e decl.(decl_type))
+              (tp e decl)
+              (* (type_rename_transformer e decl.(decl_type)) *)
               t
         )
   end in
   Ffix ctx e t.
 
+Definition it_kptProd_default saveinfo ctx e t :=
+    it_kptProd saveinfo ctx (fun e decl => type_rename_transformer e decl.(decl_type)) e t.
+
 (*iterate mktProd*)
-Definition it_mktProd (saveinfo:option string) (ctx:context) (e:infolocal) (t: infolocal -> term) : term :=
+Definition it_mktProd (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
   let saveinfo :=
     match saveinfo with | None => NoSave | Some str => Savelist str
   end in
@@ -404,11 +420,15 @@ Definition it_mktProd (saveinfo:option string) (ctx:context) (e:infolocal) (t: i
           let e' := update_kp decl.(decl_name) e saveinfo in
           let e0 := update_mk decl.(decl_name) e0 saveinfo in
           tProd decl.(decl_name)
-            (type_rename_transformer e decl.(decl_type)) (t e' e0)
+            (tp e decl)
+            (* (type_rename_transformer e decl.(decl_type)) *)
+            (t e' e0)
         )
   end in
   Ffix ctx e e (fun (_:infolocal) => t).
 
+Definition it_mktProd_default saveinfo ctx e t :=
+  it_mktProd saveinfo ctx (fun e decl => type_rename_transformer e decl.(decl_type)) e t.
 
 (* How to choose [mktProd] [kptProd]:
 

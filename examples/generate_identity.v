@@ -99,8 +99,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        e <- it_kptProd (Some "params") (params) (initial_info);;
-        e <- it_mktProd (Some "indices") (indices) e ;;
+        e <- it_kptProd_default (Some "params") (params) (initial_info);;
+        e <- it_mktProd_default (Some "indices") (indices) e ;;
         e <- mktProd NoSave the_name e
               (tApp (tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;

@@ -200,12 +200,12 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
   (* ATTENTION: in the quotation of inductive type, the parameters, indices are in reverse order *)
   (*forall (A1:Param1) ... (Ak:Paramk),*)
 
-  e <- it_kptProd (Some "params") (params) initial_info;;
+  e <- it_kptProd_default (Some "params") (params) initial_info;;
   (*forall P:?, ?*)
   e <- mktProd (Saveitem "P") prop_name e
         (*type of P: forall (i1:Ind1) ... (im:Indm), T A1 ... Ak i1 ... im -> Prop*)
         ((*forall (i1:Ind1) ... (im:Indm)*)
-          e <- it_mktProd (Some "indices") (indices) e;;
+          e <- it_mktProd_default (Some "indices") (indices) e;;
           tProd the_name
             (*T A1 ... Ak i1 ... im*)
             (tApp (tInd the_inductive [])
@@ -219,7 +219,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
   e <- aux e body.(ind_ctors);;
     (*forall (i1:Ind1) ... (im:Indm),
       forall (x:T A1 ... Ak i1 ... im), P i1 ... im x*)
-    e <- it_mktProd (Some "indices") (indices) e;;
+    e <- it_mktProd_default (Some "indices") (indices) e;;
     e <- mktProd (Saveitem "x") the_name e
           (*type of x: T A1 ... Ak i1 ... im*)
           (tApp (tInd the_inductive [])
@@ -381,7 +381,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
       | ctr :: l =>
           mktProd NoSave the_name e
           (
-            it_kptProd (Some "no_uniform_params") (no_uniform_params) e $
+            it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
             fun e => auxctr e ctr i)
           (fun e => Ffix e l t (i+1))
       end
@@ -392,15 +392,15 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
   let indices_main := mainbody.(ind_indices) in
   let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
 
-  it_kptProd (Some "params") (params) initial_info $
+  it_kptProd_default (Some "params") (params) initial_info $
     fold_right_i_aux (
       fun body i t => fun e =>
         let the_inductive := {| inductive_mind := kername; inductive_ind :=i |} in
         let indices := body.(ind_indices) in
         mktProd (Savelist "P") prop_name e
           (
-          it_kptProd (Some "no_uniform_params") (no_uniform_params) e $
-          fun e => it_mktProd (Some "indices") (indices) e $
+          it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
+          fun e => it_mktProd_default (Some "indices") (indices) e $
             fun e => tProd the_name
               (tApp (tInd the_inductive [])
                 (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
@@ -411,8 +411,8 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
         (fun body i t => fun e => aux e body.(ind_ctors) i t)
         0 bodies
         (fun e =>
-          it_kptProd (Some "no_uniform_params") (no_uniform_params) e $
-          fun e => it_mktProd (Some "indices") (indices_main) e $
+          it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
+          fun e => it_mktProd_default (Some "indices") (indices_main) e $
             fun e =>
               mktProd (Saveitem "x") the_name e
                 (
