@@ -38,49 +38,18 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
       let auxctr (e:infolocal) (ctr:constructor_body) i : term :=
         let constructor_current := tConstruct the_inductive i [] in
         let cstr_type := ctr.(cstr_type) in
-        (*get the return type of the type constructor*)
-        (*vec A (S n)*)
-        let return_type: term :=
-          (fix Ffix t :=
-            match t with
-            | tProd _ _ t => Ffix t
-            | _ => t
-            end ) cstr_type
-        in
+
         (*transforme the return type of constructor*)
         (*'cons : ... -> vec A (S n)'   ~~~>   P (S n) (cons A a n v)
                           ^^^^^^^^^^                                *)
-        let transformer_result (t:term) :infolocal -> term := fun e =>
-          match t with
-          | tApp (tRel i) tl =>
-            (*check that the return type of the constructor is exactly the type which we are defining*) (*vec*)
-            match is_recursive_call_gen e i with
-            | Some _ =>
-                tApp
-                (rel_of "P" e)
-                (*tl ~~ [A; S n]*)
-                (let tl := n_tl tl (length params) in
-                  (*get rid of the parameter [A], remind that P has type (forall (n:nat), vec A n -> Prop)*)
-                  (map (type_rename_transformer e) tl) (*renaming transformation*) (*S n ~~~~> S (tRel _)*)
-                    ++
-                    [           (*cons*)
-                      tApp constructor_current
-                        (* A *)                                                    (*  a n v  *)
-                        (rels_of "params" e ++ rels_of "args" e)
-                    ])
-            | None => todo (*must be an error*)
-            end
-          | tRel i => (*for other inductive type, not parametric, without indices*)
-            match is_recursive_call_gen e i with
-            | Some _ =>
-              tApp
-                (rel_of "P" e)
-                [ tApp constructor_current
-                  (rels_of "params" e ++ rels_of "args" e)
-                  ]
-            | None => todo (*must be an error*)
-            end
-          | _ => todo end (*must be an error*)
+        let transformer_result :infolocal -> term := fun e =>
+          tApp (rel_of "P" e)
+            (
+              (map (type_rename_transformer e) ctr.(cstr_indices))
+              ++
+              [tApp constructor_current
+                (rels_of "params" e ++ rels_of "args" e)]
+            )
         in
         (*transforme the argument*)
           (*A ~~~> forall (a:A) -> [t] *)
@@ -164,13 +133,13 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                   t
           end
         in
-        let transformer_args args (t:term): infolocal -> term :=
-          fold_right (
-            fun arg t => auxarg arg t
-            ) (transformer_result t) args
+        let fix transformer_args args t: infolocal -> term :=
+          match args with
+          | [] => t
+          | arg :: args' => transformer_args args' (auxarg arg t)
+          end
         in
-        (*ATTENTION: in the quotation of inductive types, the args of constuctor is saved in reverse order*)
-        transformer_args (rev ctr.(cstr_args)) return_type e
+        transformer_args ctr.(cstr_args) transformer_result e
       in
       match b with
       | [] => t e
@@ -251,41 +220,16 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
       let auxctr (e:infolocal) (ctr:constructor_body) i : term :=
         let constructor_current :=
           tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
-        let cstr_type := ctr.(cstr_type) in
-        let return_type: term :=
-          (fix Ffix t :=
-            match t with
-            | tProd _ _ t => Ffix t
-            | _ => t
-            end ) cstr_type
-        in
-        let transformer_result (t:term) :infolocal -> term := fun e =>
-          match t with
-          | tApp (tRel i) tl =>
-            match is_recursive_call_gen e i with
-            | Some kk =>
-              tApp
-                (geti_info "P" e kk)
-                (let tl := n_tl tl (length params) in
-                  (map (type_rename_transformer e) tl)
-                    ++
-                    [
-                      tApp constructor_current
-                      (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)
-                      ])
-            | None => todo (*must be an error*)
-            end
-          | tRel i =>
-            match is_recursive_call_gen e i with
-            | Some kk =>
-              tApp
-                (geti_info "P" e kk)
-                [ tApp constructor_current
-                  (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)
-                ]
-            | None => todo (*must be an error*)
-            end
-          | _ => todo end (*must be an error*)
+        let transformer_result :infolocal -> term := fun e =>
+          tApp (geti_info "P" e (n_ind - j - 1))
+            (
+              rels_of "no_uniform_params" e
+              ++
+              (map (type_rename_transformer e) ctr.(cstr_indices))
+              ++
+              [tApp constructor_current
+                (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
+            )
         in
         let auxarg arg (t:infolocal->term) :infolocal -> term :=
           let t1 := arg.(decl_type) in
@@ -326,7 +270,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                     (tApp
                       (geti_info "P" e kk)
                       (let tl := n_tl tl (length params) in
-                        (map (type_rename_transformer e) tl) ++ [(*tRel 0*)(geti_info "args" e 0)])
+                        (map (type_rename_transformer e) tl) ++ [(geti_info "args" e 0)])
                     ) t)
             | None =>
               kptProd (Savelist "args") na e
@@ -369,19 +313,19 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                   t
           end
         in
-        let transformer_args args (t:term): infolocal -> term :=
-          fold_right (
-            fun arg t => auxarg arg t
-            ) (transformer_result t) args
+        let fix transformer_args args t: infolocal -> term :=
+          match args with
+          | [] => t
+          | arg :: args' => transformer_args args' (auxarg arg t)
+          end
         in
-        transformer_args (rev ctr.(cstr_args)) return_type e
+        transformer_args ctr.(cstr_args) transformer_result e
       in
       match b with
       | [] => t e
       | ctr :: l =>
           mktProd NoSave the_name e
-          (
-            it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
+          (it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
             fun e => auxctr e ctr i)
           (fun e => Ffix e l t (i+1))
       end
@@ -399,27 +343,26 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
         let indices := body.(ind_indices) in
         mktProd (Savelist "P") prop_name e
           (
-          it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
-          fun e => it_mktProd_default (Some "indices") (indices) e $
-            fun e => tProd the_name
-              (tApp (tInd the_inductive [])
-                (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
-              (tSort sProp)
+          e <- it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e;;
+          e <- it_mktProd_default (Some "indices") (indices) e;;
+          tProd the_name
+            (tApp (tInd the_inductive [])
+              (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
+            (tSort sProp)
           ) t
     ) 0 bodies
       (fold_right_i_aux
         (fun body i t => fun e => aux e body.(ind_ctors) i t)
         0 bodies
         (fun e =>
-          it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e $
-          fun e => it_mktProd_default (Some "indices") (indices_main) e $
-            fun e =>
-              mktProd (Saveitem "x") the_name e
-                (
-                  tApp (tInd the_inductive_main [])
-                    (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
-                (fun e => tApp (geti_info "P" e (n_ind - 1 (*todo*)))
-                  (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e])))
+          e <- it_kptProd_default (Some "no_uniform_params") (no_uniform_params) e;;
+          e <- it_mktProd_default (Some "indices") (indices_main) e;;
+          mktProd (Saveitem "x") the_name e
+            (
+              tApp (tInd the_inductive_main [])
+                (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
+            (fun e => tApp (geti_info "P" e (n_ind - 1 (*todo*)))
+              (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e])))
       )
   .
 
