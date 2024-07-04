@@ -126,7 +126,10 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
   | tApp _ _ => fun eq => kpcProd (Savelist "args") na e
                   (type_rename_transformer e t1)
                   ta
-  | tProd na _ _ => todo
+  | tProd na _ _ => (*todo*)
+          fun eq => kpcProd (Savelist "args") na e
+                          (type_rename_transformer e t1)
+                          ta
   | _ => fun eq => kpcProd (Savelist "args") na e
           (type_rename_transformer e t1)
           ta
@@ -176,12 +179,12 @@ Program Fixpoint transformer_args {n k nind m} {l}
           in context_closed _ m2
           return forall (a:m=m2), (cast args m2 a = args0)
                 -> cinfo n k nind (add_info_len' l "args" 0) -> cterm n with
-          | nnil => fun eq1 eq2 => fun e' => t0 _ (mkcinfo _ _ _ _ (ei _ _ _ _ e') _ _ _)
+          | nnil => fun eq1 eq2 => fun e' => t0 _ (mkcinfo (ei e') _ _ _)
           | ncons _ a args' =>
             fun eq1 eq2 =>
               transformer_args args' kn ind_npars' _
                 (fun m => auxarg a kn ind_npars' _
-                  (fun p e'' => t0 p (mkcinfo _ _ _ _ (ei _ _ _ _ e'') _ _ _ )))
+                  (fun p e'' => t0 p (mkcinfo (ei e'') _ _ _ )))
           end) eq_refl eq_refl.
 Next Obligation. destruct e'. simpl. auto. Qed.
 Next Obligation. destruct e'. simpl. lia. Qed.
@@ -193,76 +196,46 @@ Next Obligation. destruct e''. simpl. lia. Qed.
 Next Obligation. destruct e''. simpl. unfold add_info_len'. auto. Qed.
 (* Next Obligation. *)
 
-Program Definition transformer_result {n k nind l} (t:cterm k) n0
-  constructor_current (ch:closedn n constructor_current)
-  (h:has_info l "P" nind)
+Program Definition transformer_result {n k nind l} j
+  constructor_current indices
+  (h:has_info l "P" nind) (hj: j < nind)
   :cinfo n k nind l -> cterm n := fun e =>
-  match proj1_sig t with
-  | tApp (tRel i) tl =>
-    match is_recursive_call_gen e i with
-    | Some kk =>
-      cApp
-        (geti_info "P" e (proj1_sig kk) _)
-        (let tl := n_tl tl n0 in
-            (map_In tl (fun t' h' => type_rename_transformer e (existc t')))
-            ++
-            [
-              cApp (existc constructor_current )
-                (rels_of "params" e ++ rels_of "args" e)
-            ])
-    | None => todo (*must be an error*)
-    end
-  | tRel i =>
-    match is_recursive_call_gen e i with
-    | Some kk =>
-      cApp
-      (geti_info "P" e (proj1_sig kk) _)
-      [ cApp (existc constructor_current )
-          (rels_of "params" e ++ rels_of "args" e)
-          ]
-    | None => todo (*must be an error*)
-    end
-  | _ => todo end (*must be an error*).
+  cApp (geti_info "P" e j _)
+    (
+      (map (type_rename_transformer e) indices)
+      ++
+      [cApp constructor_current
+        (rels_of "params" e ++ rels_of "args" e)]
+    ).
 Next Obligation.
-  unfold within_info.
-  unfold mfind.
+  unfold within_info. unfold mfind.
   unfold has_info in h.
   destruct (find (fun x : string × nat => String.eqb "P" x.1) l) eqn:eq0.
   + destruct p. lia.
   + inversion h.
 Qed.
-Next Obligation.
-  destruct t. simpl in Heq_anonymous0. rewrite <- Heq_anonymous0 in i0.
-  simpl in i0. apply andb_andI in i0. destruct i0 as [ih1 ih2]. apply forallb_Forall in ih2.
-  eapply Forall_forall in ih2. 2: eapply lem_ntl1. 2: exact h'. auto. Qed.
-Next Obligation.
-  unfold within_info.
-  unfold mfind.
-  unfold has_info in h.
-  destruct (find (fun x : string × nat => String.eqb "P" x.1) l) eqn:eq0.
-  + destruct p. lia.
-  + inversion h.
-Qed.
-Solve All Obligations with (repeat split; repeat discriminate).
 (* Next Obligation. *)
 
 
+
 Program Definition auxctr {n m nind l} (e:cinfo n m nind (add_info_len' l "args" 0))
-  (ctr:constructor_body_closed m) (j i:nat) kn (ind_npars' n0:nat)
+  (ctr:constructor_body_closed m) (j i:nat) kn (ind_npars':nat) (hj:j<nind)
   (h:has_info (add_info_len' l "args" m) "P" nind)
   : cterm n :=
   let the_inductive := {|inductive_mind := kn; inductive_ind := nind - j - 1|} in
   let constructor_current : term := tConstruct the_inductive i [] in
-  let cstr_type := proj1_sig (cstr_type' _ ctr) in
+  (* let cstr_type := proj1_sig (cstr_type' _ ctr) in
   let return_type :=
     (fix Ffix t :=
       match t with
       | tProd _ _ t => Ffix t
       | _ => t
       end ) cstr_type
-  in
+  in *)
   @transformer_args _ _ _ _ l (cstr_args' _ ctr) kn ind_npars' _
-    (fun m => transformer_result (exist _ return_type todo) n0 constructor_current _ _)
+    (fun m =>
+      transformer_result
+        j (existc constructor_current) (cstr_indices' _ ctr) _ _)
     e
   .
 (* Next Obligation. *)
@@ -270,21 +243,21 @@ Program Definition auxctr {n m nind l} (e:cinfo n m nind (add_info_len' l "args"
 
 Program Fixpoint Ffix_aux {n m nind l} (e:cinfo n m nind l) (b:list (constructor_body_closed m))
   (j:nat) (t:cinfo (n + #|b|) m nind l -> cterm (n + #|b|)) (i:nat)
-  (kn:kername )(ind_npars' n0:nat) (h:has_info l "P" nind) {struct b}
+  (kn:kername )(ind_npars':nat) (h:has_info l "P" nind) (hj:j<nind) {struct b}
   :cterm n:=
   (match b
     as b0 return b = b0 -> cterm n
     with
-  | [] => fun eq => cterm_lift _ $ t (mkcinfo _ _ _ _ (ei _ _ _ _ e) _ _ _)
+  | [] => fun eq => cterm_lift _ $ t (mkcinfo (ei e) _ _ _)
   | ctr :: b' => fun eq =>
       @mkcProd _ _ _ l NoSave the_name e
-        (@auxctr _ _ _ l (add_emp_info' e "args") ctr j i kn ind_npars' n0 _)
+        (@auxctr _ _ _ l (add_emp_info' e "args") ctr j i kn ind_npars' _ _)
         (fun e' =>
           Ffix_aux e' b' j
           (fun e'' => cterm_lift _ $ t
-            (mkcinfo _ _ _ _ (ei _ _ _ _ e'') _ _ _)
+            (mkcinfo (ei e'') _ _ _)
           )
-          (S i) kn ind_npars' n0 _)
+          (S i) kn ind_npars' _ _)
   end) eq_refl.
 
 Next Obligation. lia. Qed.
@@ -300,8 +273,8 @@ Next Obligation. destruct e''. simpl. auto. Qed.
 
 
 Program Definition aux' {n m nind l} (e:cinfo n m nind l) (b:list (constructor_body_closed m))
-  (j:nat) (t:cinfo (n + #|b|) m nind l -> cterm (n + #|b|)) kn ind_npars n0 h: cterm n :=
-  Ffix_aux e b j t 0 kn ind_npars n0 h.
+  (j:nat) (t:cinfo (n + #|b|) m nind l -> cterm (n + #|b|)) kn ind_npars h hj: cterm n :=
+  Ffix_aux e b j t 0 kn ind_npars h hj.
 (* Next Obligation. *)
 
 
@@ -311,7 +284,7 @@ Program Fixpoint auxnew {n k nind l} i lb kn
 
  (match lb as lb' return lb = lb' -> cinfo n k nind (add_info_len' l "P" 0) -> cterm n with
  | [] => fun eq => fun e' =>
-    cterm_lift _ $ (a0 (mkcinfo _ _ _ _ (ei _ _ _ _ e') _ _ _ ))
+    cterm_lift _ $ (a0 (mkcinfo (ei e') _ _ _ ))
  | body :: lb' => fun eq =>
    auxnew (S i) lb' kn
      (fun e (*cinfo ( n + #|lb'|) k nind ... *) =>
@@ -324,7 +297,7 @@ Program Fixpoint auxnew {n k nind l} i lb kn
                (rels_of "params" e'' ++ rels_of "indices" e''))
              (existc (tSort sProp))
          )
-         (fun e'' => cterm_lift _ $ a0 (mkcinfo _ _ _ _ (ei _ _ _ _ e'') _ _ _ )))
+         (fun e'' => cterm_lift _ $ a0 (mkcinfo (ei e'') _ _ _ )))
    end) eq_refl.
 Next Obligation. lia. Qed.
 Next Obligation. destruct e'. simpl. assert (n = n + 0). lia. rewrite <- H. auto. Qed.
@@ -350,22 +323,22 @@ Program Definition GenerateIndp_mutual (kername : kername)
   | false => existc (tSort sProp)
   | true =>
   let aux {n m nind l} (e:cinfo n m nind l) (b:list (constructor_body_closed m)) h
-    (j:nat) (t: cinfo (n + #|b|) m nind l -> cterm (n + #|b|)) : cterm n :=
-    aux' e b j t kername ty.(ind_npars') (context_length params) h
+    (j:nat) hj (t: cinfo (n + #|b|) m nind l -> cterm (n + #|b|)) : cterm n :=
+    aux' e b j t kername ty.(ind_npars') h hj
   in
 
-  let fix fold_right_i_aux {n m nind l} bl i h
+  let fix fold_right_i_aux {n m nind l} bl i h (hi:i + #|bl| <= nind)
     (t: cinfo (n + sum' bl) m nind l -> cterm (n + sum' bl)):
     cinfo n m nind l -> cterm n
     :=
     match bl with
-    | [] => fun e => cterm_lift _ $  t (mkcinfo _ _ _ _ (ei _ _ _ _ e) _ _ _ )
+    | [] => fun e => cterm_lift _ $  t (mkcinfo (ei e) _ _ _ )
     | b :: bl' => fun e => cterm_lift _ $
-      fold_right_i_aux bl' (S i) h (
+      fold_right_i_aux bl' (S i) h _ (
         fun e' => cterm_lift _ $
-          aux e' (ind_ctors' _ b) h i
+          aux e' (ind_ctors' _ b) h i _
               (fun e'' =>
-                cterm_lift _ $ t (mkcinfo _ _ _ _ (ei _ _ _ _ e'') _ _ _ ))
+                cterm_lift _ $ t (mkcinfo (ei e'') _ _ _ ))
       ) e end
   in
 
@@ -377,7 +350,7 @@ Program Definition GenerateIndp_mutual (kername : kername)
     (fun e1 =>
       @auxnew _ _ _ _ 0 (rev bodies) kername
       (* (fun e => existc (tSort sProp)) *)
-        (fold_right_i_aux  (rev bodies) 0 _
+        (fold_right_i_aux  (rev bodies) 0 _ _
             (
             fun e => it_mkcProd ("indices") (indices_main) e $
             fun e =>
@@ -397,7 +370,9 @@ Next Obligation. lia. Qed.
 Next Obligation. destruct e. simpl. assert  (n + 0 = n). lia. rewrite H. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
-Next Obligation.  lia. Qed.
+Next Obligation. lia. Qed.
+Next Obligation. lia. Qed.
+Next Obligation. lia. Qed.
 Next Obligation. destruct e''. simpl.
   assert (n + sum' bl' + #|ind_ctors' m b| = n + (sum' bl' + #|ind_ctors' m b|)).
   lia. rewrite <- H. auto. Qed.
@@ -407,12 +382,13 @@ Next Obligation.
   unfold has_info. simpl. destruct h.
   rewrite rev_length. lia.
 Qed.
+Next Obligation. rewrite rev_length. destruct h. lia. Qed.
 Next Obligation.
   unfold within_info. unfold mfind. simpl. rewrite rev_length.
   apply eq_sym in Heq_anonymous.
   apply Compare_dec.leb_complete in Heq_anonymous. lia.
 Qed.
-
+(* Next Obligation. *)
 
 
 Definition kn_myProjT2 :=

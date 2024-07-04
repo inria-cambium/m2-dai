@@ -57,7 +57,7 @@ Record constructor_body_closed (n:nat) := Build_constructor_body_closed {
   cstr_name' : ident;
   cstr_arity' : nat;
   cstr_args' : context_closed n cstr_arity';
-  cstr_indices' : list term; (*not used*)
+  cstr_indices' : list (cterm (n + cstr_arity'));
   cstr_type' : cterm n;
 
 }.
@@ -71,8 +71,7 @@ Program Definition aux_constructor_body n body
     body.(cstr_name)
     #|body.(cstr_args)|
     (aux_context n body.(cstr_args))
-
-    body.(cstr_indices)
+    (map (fun t => exist _ t todo) body.(cstr_indices))
     (exist _ body.(cstr_type) todo)
     .
 
