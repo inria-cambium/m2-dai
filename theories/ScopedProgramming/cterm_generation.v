@@ -18,7 +18,7 @@ Definition mkcProd {n k nind:nat} {l} (saveinfo:saveinfo) na (e:cinfo n k nind l
   cProd na t1 (t2 e').
 
 
-Program Definition is_recursive_call_gen {n m nind l} (e:cinfo n m nind l) i :
+Program Definition is_rec_call {n m nind l} (e:cinfo n m nind l) i :
   option ({i:nat | i < nind}) :=
   let e := ei e in
   let nrenaming := #|e.(renaming)| in
@@ -40,17 +40,17 @@ Qed.
 
 Unset Guard Checking.
 (*todo todo todo todo todo*)
-Program Fixpoint Ffix_type_rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:closedn m t)
+Program Fixpoint Ffix_rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:closedn m t)
   {struct t}: cterm n :=
   match t with
   | tRel k =>  geti_rename e k _
   | tApp tx tl =>
-      cApp (Ffix_type_rename  e tx _)
-        (map_In tl (fun t h' => Ffix_type_rename e t _ ))
+      cApp (Ffix_rename  e tx _)
+        (map_In tl (fun t h' => Ffix_rename e t _ ))
   | tProd na t1 t2 =>
     cProd na
-      (Ffix_type_rename  e t1 _)
-      (Ffix_type_rename (update_kp na e NoSave) t2 _)
+      (Ffix_rename  e t1 _)
+      (Ffix_rename (update_kp na e NoSave) t2 _)
   | _ =>  exist _ t todo(* todo *)
   end.
 Next Obligation. apply Compare_dec.leb_complete in h. auto. Qed.
@@ -67,8 +67,8 @@ Solve All Obligations with (repeat split; discriminate).
 
 Set Guard Checking.
 
-Definition type_rename_transformer {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:=
-  Ffix_type_rename e (proj1_sig t) (proj2_sig t).
+Definition rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:=
+  Ffix_rename e (proj1_sig t) (proj2_sig t).
 
 
 Definition add_info_len (l:list (string*nat)) si i :=
@@ -106,7 +106,7 @@ Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:saveinfo)
         Ffix_kpcProd saveinfo ctx' e
           (fun e' =>
             kpcProd saveinfo a.(decl_name) e'
-              (type_rename_transformer e' (a.(decl_type)))
+              (rename e' (a.(decl_type)))
               (fun e'' => cterm_lift _ (t (mkcinfo (ei e'') _ _ _) )))
     end
   )  eq_refl eq_refl.
@@ -371,7 +371,7 @@ Program Fixpoint Ffix_mkcProd' {n k nind m:nat} {l} (saveinfo:string)
       (* let ea' := update_kp a.(decl_name) ea saveinfo in *)
       (* let eb' := update_mk a.(decl_name) eb saveinfo in *)
         cProd a.(decl_name)
-          (type_rename_transformer ea a.(decl_type))
+          (rename ea a.(decl_type))
           (cterm_lift _  $
             t
               (mkcinfo (ei (update_kp a.(decl_name) ea (Savelist saveinfo))) _ _ _)

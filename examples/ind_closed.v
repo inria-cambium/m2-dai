@@ -86,7 +86,7 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
   (match t1 as t0 return t1 = t0 -> cterm n with
   | tRel i =>
     fun eq =>
-    match is_recursive_call_gen e i with
+    match is_rec_call e i with
     | Some kk =>
       e <- mkcProd (Savelist "args") na e
             (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} [])) ;;
@@ -95,43 +95,43 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
         ta
     | None =>
       kpcProd (Savelist "args") na e
-        (type_rename_transformer e t1)
+        (rename e t1)
         ta
     end
   (*ex. vec A n*)
   | tApp (tRel i) tl =>
     fun eq =>
-    match is_recursive_call_gen e i with
+    match is_rec_call e i with
     | Some kk =>
       (*save the argument v into information list "args"*)
       e <- mkcProd (Savelist "args") na e
             (cApp
               (* (exist _ (tInd the_inductive []) _) *)
               (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} []))
-              (map_In tl (fun t' h' => type_rename_transformer e (existc t'))));;
+              (map_In tl (fun t' h' => rename e (existc t'))));;
 
       (* P n v -> [t]*)
       kpcProd NoSave the_name e
         (cterm_lift _ $ cApp
           (geti_info "P" e (proj1_sig kk) _)
           (let tl := n_tl tl (ind_npars') in
-            (map_In tl (fun t' h' => type_rename_transformer e (existc t'))) (*n*)
+            (map_In tl (fun t' h' => rename e (existc t'))) (*n*)
             ++ [geti_info "args" e 0 _(*tRel 0*)] (*v*))
         ) ta
     | None =>
       kpcProd (Savelist "args") na e
-        (type_rename_transformer e t1)
+        (rename e t1)
         ta
     end
   | tApp _ _ => fun eq => kpcProd (Savelist "args") na e
-                  (type_rename_transformer e t1)
+                  (rename e t1)
                   ta
   | tProd na _ _ => (*todo*)
           fun eq => kpcProd (Savelist "args") na e
-                          (type_rename_transformer e t1)
+                          (rename e t1)
                           ta
   | _ => fun eq => kpcProd (Savelist "args") na e
-          (type_rename_transformer e t1)
+          (rename e t1)
           ta
   end) eq_refl.
 
@@ -202,7 +202,7 @@ Program Definition transformer_result {n k nind l} j
   :cinfo n k nind l -> cterm n := fun e =>
   cApp (geti_info "P" e j _)
     (
-      (map (type_rename_transformer e) indices)
+      (map (rename e) indices)
       ++
       [cApp constructor_current
         (rels_of "params" e ++ rels_of "args" e)]

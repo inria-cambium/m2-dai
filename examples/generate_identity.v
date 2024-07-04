@@ -40,19 +40,19 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                 match arg.(decl_type) with
                 (*type with indice/parameter*)
                 | tApp (tRel j) tl =>
-                  match is_recursive_call_gen e j with
+                  match is_rec_call e j with
                   | None => arg_current
                   | Some kk =>
                     tApp
                       (*recursive call of the identity function*) (*id_vec*)
                       (geti_info "rels_of_id" e kk)
                       ( (*the parameter/indice of the identity function*) (*X n*)
-                        (map (type_rename_transformer e) tl)
+                        (map (rename e) tl)
                         (*the last argument*) (*v*)
                         ++ [arg_current])
                   end
                 | tRel j =>
-                  match is_recursive_call_gen e j with
+                  match is_rec_call e j with
                   | None => arg_current
                   | Some kk => tApp (geti_info "rels_of_id" e kk) [arg_current]
                   end
@@ -62,18 +62,18 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                     match t with
                     | tProd na t1 t2 =>
                       kptLambda (Savelist "arglambda") na e
-                        (type_rename_transformer e t1)
+                        (rename e t1)
                         (fun e => transformer t2 e u)
                     | tApp (tRel j) tl =>
-                      match is_recursive_call_gen e j with
+                      match is_rec_call e j with
                       | None => todo (*must be an error*)
                       | Some kk =>
                           tApp (geti_info "rels_of_id" e kk)
-                          (map (type_rename_transformer e) tl ++
+                          (map (rename e) tl ++
                             [tApp (u e) (rels_of "arglambda" e)])
                       end
                     | tRel j =>
-                      match is_recursive_call_gen e j with
+                      match is_rec_call e j with
                       | None => todo (*must be an error*)
                       | Some kk =>
                           tApp (geti_info "rels_of_id" e kk) [tApp (u e) (rels_of "arglambda" e)]

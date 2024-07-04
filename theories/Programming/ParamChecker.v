@@ -32,7 +32,7 @@ Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool
   let fix aux argtype e bl: list bool:=
     match argtype with
     | tApp (tRel i) tl =>
-      match is_recursive_call_gen e i with
+      match is_rec_call e i with
       | Some _ =>
         and_listbool bl
           (mapi (

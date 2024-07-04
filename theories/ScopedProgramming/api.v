@@ -14,13 +14,13 @@ Definition mkcProd {n k nind:nat} {l} (saveinfo:saveinfo) na (e:cinfo n k nind l
   : cterm n
   := mkcProd saveinfo na e t1 t2.
 
-Definition is_recursive_call_gen {n m nind l} (e:cinfo n m nind l) (i:nat)
+Definition is_rec_call {n m nind l} (e:cinfo n m nind l) (i:nat)
   : option ({i:nat | i < nind})
-  := is_recursive_call_gen e i.
+  := is_rec_call e i.
 
-Definition type_rename_transformer {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m)
+Definition rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m)
   : cterm n
-  := type_rename_transformer e t.
+  := rename e t.
 
 Definition it_kpcProd {n k m nind:nat} {l} (saveinfo:saveinfo)
   (ctx:context_closed k m) (e:cinfo n k nind l)

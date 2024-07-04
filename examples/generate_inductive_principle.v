@@ -45,7 +45,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         let transformer_result :infolocal -> term := fun e =>
           tApp (rel_of "P" e)
             (
-              (map (type_rename_transformer e) ctr.(cstr_indices))
+              (map (rename e) ctr.(cstr_indices))
               ++
               [tApp constructor_current
                 (rels_of "params" e ++ rels_of "args" e)]
@@ -61,7 +61,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
           fun e =>
           match t1 with
           | tRel i =>
-            match is_recursive_call_gen e i with
+            match is_rec_call e i with
             | Some _ =>
               e <- mktProd (Savelist "args") na e (tInd the_inductive []);;
               kptProd NoSave the_name e
@@ -71,65 +71,65 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
             | None =>
               (*save the argument n into information list "args"*)
               kptProd (Savelist "args") na e
-                (type_rename_transformer e t1)
+                (rename e t1)
                 t
             end
           (*ex. vec A n*)
           | tApp (tRel i) tl =>
-            match is_recursive_call_gen e i with
+            match is_rec_call e i with
             | Some _ =>
               (*save the argument v into information list "args"*)
               e <-
                 mktProd (Savelist "args") na e
                   (*type of v: vec A n*)
-                  (tApp (tInd the_inductive []) (map (type_rename_transformer e) tl));;
+                  (tApp (tInd the_inductive []) (map (rename e) tl));;
 
               (* P n v -> [t]*)
               kptProd NoSave the_name e
                 (tApp
                   (rel_of "P" e)
                   (let tl := n_tl tl (length params) in
-                    (map (type_rename_transformer e) tl) (*n*) ++ [geti_info "args" e 0 (*tRel 0*)] (*v*))
+                    (map (rename e) tl) (*n*) ++ [geti_info "args" e 0 (*tRel 0*)] (*v*))
                 ) t
             | None =>
               kptProd (Savelist "args") na e
-                (type_rename_transformer e t1)
+                (rename e t1)
                 t
             end
           (**********************)
           | tProd na _ _ =>
             match check_return_type t1 e with
-            | None => kptProd (Savelist "args") na e (type_rename_transformer e t1) t
+            | None => kptProd (Savelist "args") na e (rename e t1) t
             | Some _ =>
               let fix aux_nested e t1 :=
                 match t1 with
                 | tProd na ta tb =>
                   kptProd (Savelist "arglambda") na e
-                    (type_rename_transformer e ta) (fun e => aux_nested e tb)
+                    (rename e ta) (fun e => aux_nested e tb)
                 | tRel _ =>
-                  match is_recursive_call_gen e i with
+                  match is_rec_call e i with
                   | None => todo
                   | Some kk =>
                     tApp (rel_of "P" e)
                       [tApp (geti_info "args" e 0) (rels_of "arglambda" e)]
                   end
                 | tApp (tRel _) tl =>
-                  match is_recursive_call_gen e i with
+                  match is_rec_call e i with
                   | None => todo
                   | Some kk =>
                     tApp (rel_of "P" e)
                       (let tl := n_tl tl (length params) in
-                        (map (type_rename_transformer e) tl) ++
+                        (map (rename e) tl) ++
                         [tApp (geti_info "args" e 0) (rels_of "arglambda" e)])
                   end
                 | _ => todo
                 end in
-              e <- mktProd (Savelist "args") na e (type_rename_transformer e t1);;
+              e <- mktProd (Savelist "args") na e (rename e t1);;
               kptProd NoSave the_name e (aux_nested e t1) t
             end
           (**********************)
           | _ => kptProd (Savelist "args") na e
-                  (type_rename_transformer e t1)
+                  (rename e t1)
                   t
           end
         in
@@ -225,7 +225,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
             (
               rels_of "no_uniform_params" e
               ++
-              (map (type_rename_transformer e) ctr.(cstr_indices))
+              (map (rename e) ctr.(cstr_indices))
               ++
               [tApp constructor_current
                 (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
@@ -237,7 +237,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
           fun e =>
           match t1 with
           | tRel i =>
-            match is_recursive_call_gen e i with
+            match is_rec_call e i with
             | Some kk =>
               mktProd (Savelist "args") na e
                 (
@@ -252,11 +252,11 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                     t)
             | None =>
               kptProd (Savelist "args") na e
-                (type_rename_transformer e t1)
+                (rename e t1)
                 t
             end
           | tApp (tRel i) tl =>
-            match is_recursive_call_gen e i with
+            match is_rec_call e i with
             | Some kk =>
               mktProd (Savelist "args") na e
                 (
@@ -264,52 +264,52 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                     (tInd
                       {| inductive_mind := kername; inductive_ind := (*todo*) n_ind -1 - kk |}
                       [])
-                    (map (type_rename_transformer e) tl))
+                    (map (rename e) tl))
                 (fun e =>
                   kptProd NoSave the_name e
                     (tApp
                       (geti_info "P" e kk)
                       (let tl := n_tl tl (length params) in
-                        (map (type_rename_transformer e) tl) ++ [(geti_info "args" e 0)])
+                        (map (rename e) tl) ++ [(geti_info "args" e 0)])
                     ) t)
             | None =>
               kptProd (Savelist "args") na e
-                (type_rename_transformer e t1)
+                (rename e t1)
                 t
             end
           (*****************************************)
           | tProd na _ _ =>
             match check_return_type t1 e with
-            | None => kptProd (Savelist "args") na e ( type_rename_transformer e t1) t
+            | None => kptProd (Savelist "args") na e ( rename e t1) t
             | Some _ =>
               let fix aux_nested e t1 :=
                 match t1 with
                 | tProd na ta tb =>
                   kptProd (Savelist "arglambda") na e
-                    (type_rename_transformer e ta) (fun e => aux_nested e tb)
+                    (rename e ta) (fun e => aux_nested e tb)
                 | tRel i =>
-                  match is_recursive_call_gen e i with
+                  match is_rec_call e i with
                   | None => todo
                   | Some kk =>
                     tApp (geti_info "P" e kk)
                       [tApp (geti_info "args" e 0) (rels_of "arglambda" e)]
                   end
                 | tApp (tRel i) tl =>
-                  match is_recursive_call_gen e i with
+                  match is_rec_call e i with
                   | None => todo
                   | Some kk =>
                     tApp (geti_info "P" e kk)
                       (let tl := n_tl tl (length params) in
-                        (map (type_rename_transformer e) tl) ++
+                        (map (rename e) tl) ++
                         [tApp (geti_info "args" e 0) (rels_of "arglambda" e)])
                   end
                 | _ => todo end in
-              mktProd (Savelist "args") na e (type_rename_transformer e t1)
+              mktProd (Savelist "args") na e (rename e t1)
                 (fun e => kptProd NoSave the_name e (aux_nested e t1) t)
             end
           (*****************************************)
           | _ => kptProd (Savelist "args") na e
-                  (type_rename_transformer e t1)
+                  (rename e t1)
                   t
           end
         in

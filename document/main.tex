@@ -231,7 +231,7 @@ Initialize the local information.
 
 \item
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition is_recursive_call_gen (e:infolocal) (i:nat) : option nat
+Definition is_rec_call (e:infolocal) (i:nat) : option nat
 \end{lstlisting}
 For a local information \coqe{e}, by checking \coqe{e.(info_source)}, see whether \coqe{(tRel i)} refers to the type name of one inductive body of the source. In the example above of \coqe{vec}$_{\ref{vec}}$, the underlined "vec" refers exactly to the type name.
 
@@ -242,7 +242,7 @@ If \coqe{(tRel i)} refers to the type name of the $k$th inductive body, return \
 
 \item
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition type_rename_transformer (e:infolocal) (t:term) : term
+Definition rename (e:infolocal) (t:term) : term
 \end{lstlisting}
 Renaming transformation, transform the term \coqe{t} according to the renaming map. i.e. for each subterm \coqe{(tRel i)} of \coqe{t},
 use the former function to check if it refers to the type name, if it is the case, maps it to the term of the type (a tInd term); otherwise, maps it to \coqe{(geti_rename e i)}. 
@@ -669,24 +669,24 @@ let auxarg arg (t:infolocal -> term): infolocal -> term :=
   fun e =>
   match t1 with (*take arg (vec A n) for example*)
   | tApp (tRel i) tl (*tApp `vec' `[A n]'*) =>
-    match is_recursive_call_gen e i with
+    match is_rec_call e i with
     | Some _ =>
       (*save the argument v into information list "args"*)
       e <- mktProd (Savelist "args") na e
         (*type of v: vec A n*)
-        (tApp (tInd the_inductive []) (map (type_rename_transformer e) tl));;
+        (tApp (tInd the_inductive []) (map (rename e) tl));;
       (* P n v -> t*)    
       kptProd NoSave the_name e
         (tApp
           (rel_of "P" e) (*P*)
           (let tl := n_tl tl (length params) in 
             (*do x times List.tl, i.e. remove the params*)
-            (map (type_rename_transformer e) tl) (*n*) 
+            (map (rename e) tl) (*n*) 
              ++ [geti_info "args" e 0] (*v*))
         ) t
     | None =>
       kptProd (Savelist "args") na e
-        (type_rename_transformer e t1)
+        (rename e t1)
         t
     end
   |...
