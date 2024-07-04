@@ -370,67 +370,87 @@ Definition rename (e:infolocal) (t:term) : term:=
   end in
   Ffix e t.
 
-(* make a Prod term *)
-(* [saveinfo]: if save the information of new variable into e
-   [na]:       the aname of new variable
-   [e]:        the local information
-   [t1]:       the type of new variable
-   [t2]:       the term (need to be fed with infolocal)
-*)
-Definition mktProd (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
-  let e' := update_mk na e saveinfo in
-  tProd na (t1) (t2 e').
 
-Definition kptProd (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
-  let e' := update_kp na e saveinfo in
-  tProd na (t1) (t2 e').
+Section term_generation.
 
-(*iterate kptProd*)
-Definition it_kptProd (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
-  let saveinfo :=
-    match saveinfo with | None => NoSave | Some str => Savelist str
-  end in
-  let fix Ffix ctx e t:=
-    match ctx with
-    | [] => t e
-    | decl :: ctx' =>
-        Ffix ctx' e (
-          fun e =>
-            kptProd saveinfo decl.(decl_name) e
+  Context (bind: aname -> term -> term -> term).
+
+  (* make a Prod/Lambda term *)
+  (* [saveinfo]: if save the information of new variable into e
+    [na]:       the aname of new variable
+    [e]:        the local information
+    [t1]:       the type of new variable
+    [t2]:       the term (need to be fed with infolocal)
+  *)
+  Definition kptbind (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
+    let e' := update_kp na e saveinfo in
+    bind na (t1) (t2 e').
+
+  Definition mktbind (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
+    let e' := update_mk na e saveinfo in
+    bind na (t1) (t2 e').
+
+  Definition it_kptbind (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
+    let saveinfo :=
+      match saveinfo with | None => NoSave | Some str => Savelist str
+    end in
+    let fix Ffix ctx e t:=
+      match ctx with
+      | [] => t e
+      | decl :: ctx' =>
+          Ffix ctx' e (
+            fun e =>
+              kptbind saveinfo decl.(decl_name) e
+                (tp e decl)
+                (* (rename e decl.(decl_type)) *)
+                t
+          )
+    end in
+    Ffix ctx e t.
+
+  Definition it_mktbind (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
+    let saveinfo :=
+      match saveinfo with | None => NoSave | Some str => Savelist str
+    end in
+    let fix Ffix ctx e e0 t:=
+      match ctx with
+      | [] => t e e0
+      | decl :: ctx' =>
+          Ffix ctx' e e0 (fun e e0 =>
+            let e' := update_kp decl.(decl_name) e saveinfo in
+            let e0 := update_mk decl.(decl_name) e0 saveinfo in
+            bind decl.(decl_name)
               (tp e decl)
               (* (rename e decl.(decl_type)) *)
-              t
-        )
-  end in
-  Ffix ctx e t.
+              (t e' e0)
+          )
+    end in
+    Ffix ctx e e (fun (_:infolocal) => t).
 
-Definition it_kptProd_default saveinfo ctx e t :=
-    it_kptProd saveinfo ctx (fun e decl => rename e decl.(decl_type)) e t.
+  Definition it_kptbind_default saveinfo ctx e t :=
+    it_kptbind saveinfo ctx (fun e decl => rename e decl.(decl_type)) e t.
 
-(*iterate mktProd*)
-Definition it_mktProd (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
-  let saveinfo :=
-    match saveinfo with | None => NoSave | Some str => Savelist str
-  end in
-  let fix Ffix ctx e e0 t:=
-    match ctx with
-    | [] => t e e0
-    | decl :: ctx' =>
-        Ffix ctx' e e0 (fun e e0 =>
-          let e' := update_kp decl.(decl_name) e saveinfo in
-          let e0 := update_mk decl.(decl_name) e0 saveinfo in
-          tProd decl.(decl_name)
-            (tp e decl)
-            (* (rename e decl.(decl_type)) *)
-            (t e' e0)
-        )
-  end in
-  Ffix ctx e e (fun (_:infolocal) => t).
+  Definition it_mktbind_default saveinfo ctx e t :=
+    it_mktbind saveinfo ctx (fun e decl => rename e decl.(decl_type)) e t.
 
-Definition it_mktProd_default saveinfo ctx e t :=
-  it_mktProd saveinfo ctx (fun e decl => rename e decl.(decl_type)) e t.
+End term_generation.
 
-(* How to choose [mktProd] [kptProd]:
+Definition kptProd := kptbind tProd.
+Definition mktProd := mktbind tProd.
+Definition it_kptProd := it_kptbind tProd.
+Definition it_mktProd := it_mktbind tProd.
+Definition it_kptProd_default := it_kptbind_default tProd.
+Definition it_mktProd_default := it_mktbind_default tProd.
+
+Definition kptLambda := kptbind tLambda.
+Definition mktLambda := mktbind tLambda.
+Definition it_kptLambda := it_kptbind tLambda.
+Definition it_mktLambda := it_mktbind tLambda.
+Definition it_kptLambda_default := it_kptbind_default tLambda.
+Definition it_mktLambda_default := it_mktbind_default tLambda.
+
+(*
+Remark: how to choose [mktbind] [kptbind]:
 
   Source: inductive type definition
     Inductive T (A1:Param1) ... (Ak:Paramk): Ind1 -> Ind2 ...  ->Indm -> Type := ... .
@@ -450,52 +470,8 @@ Definition it_mktProd_default saveinfo ctx e t :=
 *)
 
 
-(* make a Lambda term *)
-Definition mktLambda saveinfo na (e:infolocal)  (t1:term)
-  (t2:infolocal -> term)
-  : term :=
-  tLambda na (t1) (t2 (update_mk na e saveinfo)).
 
-Definition kptLambda saveinfo na (e:infolocal) (t1:term)
-  (t2:infolocal -> term)
-  : term :=
-  tLambda na (t1) (t2 (update_kp na e saveinfo)).
 
-(*iterate mktLambda*)
-Definition it_mktLambda saveinfo (ctx:context) (e:infolocal) (t: infolocal -> term) : term :=
-  let saveinfo :=
-    match saveinfo with | None => NoSave | Some str => Savelist str
-  end in
-  let fix Ffix ctx e e0 t:=
-    match ctx with
-    | [] => t e e0
-    | decl :: ctx' =>
-        Ffix ctx' e e0 (fun e e0 =>
-          let e' := update_kp decl.(decl_name) e saveinfo in
-          let e0 := update_mk decl.(decl_name) e0 saveinfo in
-          tLambda decl.(decl_name)
-            (rename e decl.(decl_type)) (t e' e0)
-        )
-  end in
-  Ffix ctx e e (fun (_:infolocal) => t).
-
-(*iterate kptLambda*)
-Definition it_kptLambda saveinfo (ctx:context) (e:infolocal) (t: infolocal -> term) : term :=
-  let saveinfo :=
-    match saveinfo with | None => NoSave | Some str => Savelist str
-  end in
-  let fix Ffix ctx e t:=
-    match ctx with
-    | [] => t e
-    | decl :: ctx' =>
-        Ffix ctx' e (
-          fun e =>
-            kptLambda saveinfo decl.(decl_name) e
-              (rename e decl.(decl_type))
-              t
-        )
-  end in
-  Ffix ctx e t.
 
 (*
   Used for lambda type argument.

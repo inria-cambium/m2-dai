@@ -109,8 +109,8 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 
       (*params is in reverse order*)
       dbody :=
-        e <- it_kptLambda (Some "params") (params) (initial_info);;
-        e <- it_mktLambda (Some "indices") (rev indices) e;;
+        e <- it_kptLambda_default (Some "params") (params) (initial_info);;
+        e <- it_mktLambda_default (Some "indices") (rev indices) e;;
         e <- mktLambda (Saveitem "x") the_name e
               (tApp (tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;
