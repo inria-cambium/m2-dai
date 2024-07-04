@@ -314,14 +314,16 @@ Fixpoint sum' {m} (bl:list (one_inductive_body_closed m)) :=
   | b :: bl' => (sum' bl') + #|ind_ctors' _ b| end.
 
 Program Definition GenerateIndp_mutual (kername : kername)
- (ty :  mutual_inductive_body_closed) (h:wf_ind_closed ty) : cterm 0 :=
+ (ty: mutual_inductive_body_closed)
+ (h: wf_ind_closed ty) (h0: #|ind_bodies' ty| > 0)
+ : cterm 0 :=
   let params := ind_params' ty in
   let initial_info := make_initial_cinfo kername ty h in
   let bodies := ind_bodies' ty in
   let n_ind := #|bodies| in
-  match Nat.ltb 0 n_ind with
+  (* match Nat.ltb 0 n_ind with
   | false => existc (tSort sProp)
-  | true =>
+  | true => *)
   let aux {n m nind l} (e:cinfo n m nind l) (b:list (constructor_body_closed m)) h
     (j:nat) hj (t: cinfo (n + #|b|) m nind l -> cterm (n + #|b|)) : cterm n :=
     aux' e b j t kername ty.(ind_npars') h hj
@@ -363,7 +365,6 @@ Program Definition GenerateIndp_mutual (kername : kername)
 
         (add_emp_info' e1 "P")
     )
-  end
   .
 
 Next Obligation. lia. Qed.
@@ -384,9 +385,7 @@ Next Obligation.
 Qed.
 Next Obligation. rewrite rev_length. destruct h. lia. Qed.
 Next Obligation.
-  unfold within_info. unfold mfind. simpl. rewrite rev_length.
-  apply eq_sym in Heq_anonymous.
-  apply Compare_dec.leb_complete in Heq_anonymous. lia.
+  unfold within_info. unfold mfind. simpl. rewrite rev_length. lia.
 Qed.
 Next Obligation. unfold within_info. unfold mfind. simpl. lia. Qed.
 
@@ -400,8 +399,8 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
     | (tInd ind u) =>
       let kn := ind.(inductive_mind) in
       $let mind := tmQuoteInductive kn in
-      let cbody := get_cbody mind in
-      let id := GenerateIndp_mutual kn (proj1_sig cbody) (proj2_sig cbody) in
+      let cbody := get_cbody mind todo in
+      let id := GenerateIndp_mutual kn (proj1_sig cbody) (proj2_sig cbody) todo in
       $let u := tmUnquote (proj1_sig id) in
       $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
         match out with
