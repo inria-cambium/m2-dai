@@ -7,12 +7,12 @@ Import Lia.
 Axiom todo : forall {A}, A.
 
 
-Definition kpcProd {n k nind:nat} {l} (saveinfo:saveinfo) na (e:cinfo n k nind l)
+Definition kpcProd {n k nind:nat} {l} (saveinfo:option string) na (e:cinfo n k nind l)
   (t1:cterm n) (t2 : cinfo (S n) (S k) nind (replace_info_len saveinfo l)-> cterm (S n)): cterm n:=
   let e' := update_kp na e saveinfo in
   cProd na (t1) (t2 e').
 
-Definition mkcProd {n k nind:nat} {l} (saveinfo:saveinfo) na (e:cinfo n k nind l)
+Definition mkcProd {n k nind:nat} {l} (saveinfo:option string) na (e:cinfo n k nind l)
   (t1:cterm n) (t2:cinfo (S n) k nind (replace_info_len saveinfo l) -> cterm (S n)) : cterm n:=
   let e' := update_mk na e saveinfo in
   cProd na t1 (t2 e').
@@ -37,6 +37,7 @@ Next Obligation.
   lia.
 Qed.
 
+(* Print term. *)
 
 Unset Guard Checking.
 (*todo todo todo todo todo*)
@@ -44,25 +45,62 @@ Program Fixpoint Ffix_rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h
   {struct t}: cterm n :=
   match t with
   | tRel k =>  geti_rename e k _
-  | tApp tx tl =>
-      cApp (Ffix_rename  e tx _)
-        (map_In tl (fun t h' => Ffix_rename e t _ ))
+  | tVar ident => cVar ident
+  | tEvar m tl => cEvar m (map_In tl (fun t h' => Ffix_rename e t _))
+  | tSort sort => cSort sort
+  | tCast t1 ck t2 => cCast (Ffix_rename e t1 _) ck (Ffix_rename e t2 _)
   | tProd na t1 t2 =>
     cProd na
       (Ffix_rename  e t1 _)
-      (Ffix_rename (update_kp na e NoSave) t2 _)
-  | _ =>  exist _ t todo(* todo *)
+      (Ffix_rename (update_kp na e None) t2 _)
+  | tLambda na t1 t2 =>
+    cLambda na
+      (Ffix_rename e t1 _)
+      (Ffix_rename (update_kp na e None) t2 _)
+  | tLetIn na t0 t1 t2 =>
+    cLetIn na (Ffix_rename e t0 _) (Ffix_rename e t1 _)
+      (Ffix_rename (update_kp na e None) t2 _)
+  | tApp tx tl =>
+    cApp (Ffix_rename  e tx _)
+      (map_In tl (fun t h' => Ffix_rename e t _ ))
+  | tConst ind instance => cConst ind instance
+  | tInd ind instance => cInd ind instance
+  | tConstruct ind m instance => cConstruct ind m instance
+  | tCase _ _ _ _ => exist _ t todo
+  | tProj pj t => cProj pj (Ffix_rename e t _)
+  | tFix _ _ | tCoFix _ _ => exist _ t todo
+  | tInt i => cInt i
+  | tFloat f => cFloat f
+  | tArray l arr t1 t2 =>
+    cArray l (map_In arr (fun t h' => Ffix_rename e t _))
+      (Ffix_rename e t1 _) (Ffix_rename e t2 _)
   end.
 Next Obligation. apply Compare_dec.leb_complete in h. auto. Qed.
+Next Obligation. eapply forallb_Forall in h. eapply Forall_forall in h. 2:exact h'. auto. Qed.
 Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
-
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. apply andb_andI in H. destruct H. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. apply andb_andI in H. destruct H. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
+Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
 Next Obligation.
   apply andb_andI in h. destruct h.
   eapply forallb_Forall in H0. eapply Forall_forall in H0. 2:exact h'. auto.
 Qed.
-Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
-Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
-Solve All Obligations with (repeat split; discriminate).
+Next Obligation.
+  apply andb_andI in h. destruct h. apply andb_andI in H. destruct H.
+  eapply forallb_Forall in H. eapply Forall_forall in H. 2:exact h'. auto.
+Qed.
+Next Obligation.
+  apply andb_andI in h. destruct h. apply andb_andI in H. destruct H. auto.
+Qed.
+Next Obligation.
+  apply andb_andI in h. destruct h. auto.
+Qed.
 (* Next Obligation. *)
 
 Set Guard Checking.
@@ -73,9 +111,8 @@ Definition rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:
 
 Definition add_info_len (l:list (string*nat)) si i :=
   match si with
-  | NoSave => l
-  | Saveitem _ => l
-  | Savelist str => (str, i) :: l end.
+  | None => l
+  | Some str => (str, i) :: l end.
 
 
 Definition cast {k m:nat} : context_closed k m -> forall n:nat, m = n -> context_closed k n.
@@ -87,11 +124,11 @@ Defined.
 
 Definition add_emp_info e saveinfo :=
   match saveinfo with
-  | Savelist str =>
-    mkinfo e.(renaming) ((str, []) :: e.(info)) e.(info_nat) e.(info_source) e.(kn)
+  | Some str =>
+    mkinfo e.(renaming) ((str, []) :: e.(info)) e.(info_source) e.(kn)
   | _ => e end.
 
-Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:saveinfo)
+Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
   (ctx:context_closed k m) (e:cinfo n k nind l)
   (t: forall (e:cinfo (n + m) (k+m) nind (add_info_len l saveinfo m)),
     cterm (n + m) ) {struct ctx}
@@ -113,16 +150,15 @@ Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:saveinfo)
 Next Obligation. lia. Qed.
 Next Obligation. destruct e. simpl. assert (n = n + 0). lia. rewrite <- H.
   destruct saveinfo.
-  - destruct ci. destruct H1. auto. split. auto.
-    split. simpl. 2:auto. destruct ei. simpl. constructor. auto. auto.
+  - destruct ci. split. auto.
+    simpl. destruct ei. simpl. constructor. auto.  simpl in H0. auto.
   - simpl. auto.
-  - simpl. auto. Qed.
+Qed.
 Next Obligation. destruct e. simpl.
   destruct saveinfo. all:simpl. all:lia. Qed.
 Next Obligation. destruct e. simpl. unfold add_info_len.
   destruct saveinfo.
   - simpl. constructor. auto. auto.
-  - auto.
   - auto.
 Qed.
 Next Obligation. lia. Qed.
@@ -130,15 +166,14 @@ Next Obligation. destruct e''. simpl. assert (S (n + n0) = n + S n0). lia. rewri
 Next Obligation. destruct e''. simpl. lia. Qed.
 Next Obligation.
   destruct e''. simpl. destruct ei. simpl. simpl in Pl.  destruct saveinfo.
-  + simpl in Pl. assert (String.eqb s s  = true). apply lemstr. auto. rewrite H in Pl.
+  + simpl in Pl. assert (String.eqb t0 t0  = true). apply lemstr. auto. rewrite H in Pl.
     simpl. auto.
-  + auto.
   + auto.
 Qed.
 (* Next Obligation. *)
 
 
-Program Definition it_kpcProd {n k m nind:nat} {l} (saveinfo:saveinfo)
+Program Definition it_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
   (ctx:context_closed k m) (e:cinfo n k nind l)
   (t: forall (e:cinfo (n + m) (k + m) nind (add_info_len l saveinfo m)) ,
     cterm (n + m))
@@ -374,8 +409,8 @@ Program Fixpoint Ffix_mkcProd' {n k nind m:nat} {l} (saveinfo:string)
           (rename ea a.(decl_type))
           (cterm_lift _  $
             t
-              (mkcinfo (ei (update_kp a.(decl_name) ea (Savelist saveinfo))) _ _ _)
-              (mkcinfo (ei (update_mk a.(decl_name) eb (Savelist saveinfo))) _ _ _)
+              (mkcinfo (ei (update_kp a.(decl_name) ea (Some saveinfo))) _ _ _)
+              (mkcinfo (ei (update_mk a.(decl_name) eb (Some saveinfo))) _ _ _)
           ))
   end) eq_refl eq_refl.
 Next Obligation. lia. Qed.
@@ -390,9 +425,7 @@ Next Obligation.
   simpl. destruct ea. simpl. split.
     + simpl. constructor. apply Compare_dec.leb_correct. lia.
       destruct ei, ci. simpl. simpl in H. eapply lemx02. 2: exact H. lia.
-    + simpl. split.
-      ++ destruct ei, ci. simpl. simpl in H0. destruct H0. eapply lemx03. 2: exact H0. lia.
-      ++ destruct ei, ci. simpl. simpl in H0. destruct H0. eapply lemx04. 2: exact H1. lia.
+    + simpl. destruct ei, ci. simpl. simpl in H0. eapply lemx03. 2: exact H0. lia.
 Qed.
 Next Obligation.
   simpl. destruct ea. destruct ei. simpl. simpl in ck. rewrite <- lift_renaming_length. lia.
@@ -403,9 +436,7 @@ Qed.
 Next Obligation.
   simpl. destruct eb. simpl. split.
   + simpl. destruct ei, ci. eapply lemx02. 2: exact H. lia.
-  + simpl. split.
-    ++ destruct ei, ci. simpl. simpl in H0. destruct H0. eapply lemx03. 2: exact H0. lia.
-    ++ destruct ei, ci. simpl. simpl in H0. destruct H0. eapply lemx04. 2: exact H1. lia.
+  + simpl. destruct ei, ci. simpl. simpl in H0. eapply lemx03. 2: exact H0. lia.
 Qed.
 Next Obligation.
   simpl. destruct eb. destruct ei. simpl. simpl in ck. rewrite <- lift_renaming_length. lia.
@@ -418,15 +449,13 @@ Program Definition add_emp_info' {n k nind l} (infon:cinfo n k nind l) s
   : cinfo n k nind (add_info_len' l s 0) :=
   let e := ei infon in
   mkcinfo
-    (mkinfo e.(renaming) ((s, []) :: e.(info)) e.(info_nat) e.(info_source) e.(kn))
+    (mkinfo e.(renaming) ((s, []) :: e.(info)) e.(info_source) e.(kn))
     _ _ _
     .
 Next Obligation.
   destruct infon. simpl. split.
   + simpl. destruct ci. auto.
-  + destruct ci. split.
-    ++ simpl. constructor. auto. destruct H0. auto.
-    ++ destruct H0. auto.
+  + destruct ci. simpl. constructor. auto. auto.
 Qed.
 Next Obligation.
   destruct infon. simpl. auto.
@@ -473,7 +502,7 @@ Program Definition make_initial_cinfo' (kn:kername)
               inductive_ind := ty.(nind') - i - 1 |}
             [])
           ) ty.(ind_bodies'))
-    [] []
+    []
     [("rels_of_T", (mapi (fun i ind_body =>
       mkdecl  ({| binder_name := nNamed (ind_name' _ ind_body);
                     binder_relevance := Relevant  |}) None i

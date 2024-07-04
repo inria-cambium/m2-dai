@@ -88,13 +88,13 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
     fun eq =>
     match is_rec_call e i with
     | Some kk =>
-      e <- mkcProd (Savelist "args") na e
+      e <- mkcProd (Some "args") na e
             (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} [])) ;;
-      kpcProd NoSave the_name e
+      kpcProd None the_name e
         (cterm_lift _ $ cApp (geti_info "P" e (proj1_sig kk) _) [geti_info "args" e 0 _])
         ta
     | None =>
-      kpcProd (Savelist "args") na e
+      kpcProd (Some "args") na e
         (rename e t1)
         ta
     end
@@ -104,14 +104,14 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
     match is_rec_call e i with
     | Some kk =>
       (*save the argument v into information list "args"*)
-      e <- mkcProd (Savelist "args") na e
+      e <- mkcProd (Some "args") na e
             (cApp
               (* (exist _ (tInd the_inductive []) _) *)
               (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} []))
               (map_In tl (fun t' h' => rename e (existc t'))));;
 
       (* P n v -> [t]*)
-      kpcProd NoSave the_name e
+      kpcProd None the_name e
         (cterm_lift _ $ cApp
           (geti_info "P" e (proj1_sig kk) _)
           (let tl := n_tl tl (ind_npars') in
@@ -119,18 +119,18 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
             ++ [geti_info "args" e 0 _(*tRel 0*)] (*v*))
         ) ta
     | None =>
-      kpcProd (Savelist "args") na e
+      kpcProd (Some "args") na e
         (rename e t1)
         ta
     end
-  | tApp _ _ => fun eq => kpcProd (Savelist "args") na e
+  | tApp _ _ => fun eq => kpcProd (Some "args") na e
                   (rename e t1)
                   ta
   | tProd na _ _ => (*todo*)
-          fun eq => kpcProd (Savelist "args") na e
+          fun eq => kpcProd (Some "args") na e
                           (rename e t1)
                           ta
-  | _ => fun eq => kpcProd (Savelist "args") na e
+  | _ => fun eq => kpcProd (Some "args") na e
           (rename e t1)
           ta
   end) eq_refl.
@@ -250,7 +250,7 @@ Program Fixpoint Ffix_aux {n m nind l} (e:cinfo n m nind l) (b:list (constructor
     with
   | [] => fun eq => cterm_lift _ $ t (mkcinfo (ei e) _ _ _)
   | ctr :: b' => fun eq =>
-      @mkcProd _ _ _ l NoSave the_name e
+      @mkcProd _ _ _ l None the_name e
         (@auxctr _ _ _ l (add_emp_info' e "args") ctr j i kn ind_npars' _ _)
         (fun e' =>
           Ffix_aux e' b' j
@@ -290,7 +290,7 @@ Program Fixpoint auxnew {n k nind l} i lb kn
      (fun e (*cinfo ( n + #|lb'|) k nind ... *) =>
        let the_inductive := {| inductive_mind := kn; inductive_ind := nind - i -1 |} in
        let indices := ind_indices' _ body in
-       mkcProd (Savelist "P") prop_name e
+       mkcProd (Some "P") prop_name e
          (it_mkcProd ("indices") (indices) e $
            fun e'' => cProd the_name
              (cApp (existc (tInd the_inductive []))
@@ -346,7 +346,7 @@ Program Definition GenerateIndp_mutual (kername : kername)
   let indices_main := ind_indices' _ mainbody in
   let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
 
-  it_kpcProd (Savelist "params") (params) initial_info $
+  it_kpcProd (Some "params") (params) initial_info $
     (fun e1 =>
       @auxnew _ _ _ _ 0 (rev bodies) kername
       (* (fun e => existc (tSort sProp)) *)
@@ -354,11 +354,11 @@ Program Definition GenerateIndp_mutual (kername : kername)
             (
             fun e => it_mkcProd ("indices") (indices_main) e $
             fun e =>
-              mkcProd (Saveitem "x") the_name e
+              mkcProd (Some "x") the_name e
                 (cApp (tInd the_inductive_main [])
                   (rels_of "params" e ++ rels_of "indices" e))
               (fun e => cApp (geti_info "P" e (n_ind - 1 (*todo*)) _)
-                (rels_of "indices" e ++ [rel_of "x" e])))
+                (rels_of "indices" e ++ [rel_of "x" e _])))
         )
 
         (add_emp_info' e1 "P")
@@ -388,7 +388,7 @@ Next Obligation.
   apply eq_sym in Heq_anonymous.
   apply Compare_dec.leb_complete in Heq_anonymous. lia.
 Qed.
-(* Next Obligation. *)
+Next Obligation. unfold within_info. unfold mfind. simpl. lia. Qed.
 
 
 Definition kn_myProjT2 :=

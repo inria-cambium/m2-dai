@@ -6,7 +6,7 @@ Import Lia.
 Record infolocal : Type := mkinfo {
   renaming : list (BasicAst.context_decl term);
   info : list (string * list (BasicAst.context_decl nat)) ;
-  info_nat : list (string * nat);
+  (* info_nat : list (string * nat); *)
   info_source : list (string * list (BasicAst.context_decl nat));
   kn : kername;
 }.
@@ -54,14 +54,14 @@ Section index_manage.
     | _ => []
     end.
 
-  Definition lookup_item (e : infolocal) (na : string) : nat :=
+  (* Definition lookup_item (e : infolocal) (na : string) : nat :=
     let l := e.(info_nat) in
     match find (fun i => match i with
     | (na', _) => String.eqb na na'
     end) l  with
     Some (_, n) => n
     | _ => todo (*todo error*)
-    end.
+    end. *)
 
   Lemma lift_renaming_length {renaming}: #|renaming| = #|lift_renaming renaming|.
     induction renaming.
@@ -114,7 +114,7 @@ Section index_manage.
   Qed.
 
 
-  Lemma lem_info_nat {n:nat} info_nat0:
+  (* Lemma lem_info_nat {n:nat} info_nat0:
     Forall (fun '(_, x) => Nat.ltb x n) info_nat0
       ->
     Forall (fun '(_, x) => Nat.ltb x (S n))
@@ -124,7 +124,7 @@ Section index_manage.
     - auto.
     - simpl. constructor. 2: eapply IHinfo_nat0. 2: eapply incl_Forall. 3: exact H. 2: firstorder.
       inversion H. destruct a. auto.
-  Qed.
+  Qed. *)
 
   Lemma S_forall: forall l n,
     Forall (fun x => Nat.ltb x n) l ->
@@ -209,25 +209,20 @@ Definition closed_info_n (n:nat) (e:infolocal) :=
   /\
   Forall (fun '(_, l) => Forall (fun x => Nat.ltb x n) (map decl_type l))
           e.(info)
-  /\
-  Forall (fun '(_, x) => Nat.ltb x n) e.(info_nat)
   .
 
 Lemma info_lift {n m e} : closed_info_n n e -> n <= m -> closed_info_n m e.
 Proof.
   intros.
-  destruct H. destruct H1.
+  destruct H.
   split.
   eapply Forall_impl. 2: exact H. intros. destruct a. all: auto.
-  apply Compare_dec.leb_complete in H3. apply Compare_dec.leb_correct.
+  apply Compare_dec.leb_complete in H2. apply Compare_dec.leb_correct.
   lia.
-  split.
-  eapply Forall_impl. 2: exact H1. intros. destruct a. all: auto.
-  eapply Forall_impl. 2: exact H3. simpl. intros.
-  apply Compare_dec.leb_complete in H4. apply Compare_dec.leb_correct. lia.
-  eapply Forall_impl. 2: exact H2. simpl. intros. destruct a.
-  apply Compare_dec.leb_complete in H3. apply Compare_dec.leb_correct.
-  lia.
+
+  eapply Forall_impl. 2: exact H1. intros. destruct a.
+  eapply Forall_impl. 2: exact H2. intros. apply Compare_dec.leb_correct.
+  simpl in H3. eapply Compare_dec.leb_complete in H3.  lia.
 Qed.
 
 Record cinfo (n k nind:nat) (l:list (string * nat)) :Type := mkcinfo {
@@ -241,10 +236,10 @@ Arguments mkcinfo {n k nind l}.
 Arguments ei {n k nind l}.
 
 
-Inductive saveinfo:=
+(* Inductive saveinfo:=
   | Savelist (s:string)
   | Saveitem (s:string)
-  | NoSave.
+  | NoSave. *)
 
 Fixpoint replace_S (l:list (string * nat)) str :=
   match l with
@@ -256,9 +251,8 @@ Fixpoint replace_S (l:list (string * nat)) str :=
 
 Definition replace_info_len saveinfo (l:list (string * nat)) :=
   match saveinfo with
-  | NoSave => l
-  | Saveitem _ => l
-  | Savelist str => replace_S l str
+  | None => l
+  | Some str => replace_S l str
   end.
 
 
@@ -321,7 +315,7 @@ Proof.
 Qed.
 
 
-Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) (saveinfo:saveinfo):
+Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) (saveinfo:option string):
   cinfo (S n) (S k) nind (replace_info_len saveinfo l) :=
   let e := ei e in
   let item := mkdecl na None 0 in
@@ -335,9 +329,9 @@ Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) 
       fun  x => (fst x, (plus_one_index (snd x)))
     ) e.(info)
   in
-  let info_nat :=
+  (* let info_nat :=
     map (fun x => (x.1, S x.2)) e.(info_nat)
-  in
+  in *)
   let info_source :=
     map (
       fun  x => (fst x, (plus_one_index (snd x)))
@@ -345,108 +339,83 @@ Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) 
   in
   let e :=
     match saveinfo with
-    | NoSave => mkinfo renaming info info_nat info_source e.(kn)
-    | Saveitem str => mkinfo renaming info ((str, 0) :: info_nat) info_source e.(kn)
-    | Savelist str => mkinfo renaming (replace_add_info info str item) info_nat info_source e.(kn)
+    | None => mkinfo renaming info info_source e.(kn)
+    | Some str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
     end
   in
   @mkcinfo (S n) (S k) _ (replace_info_len saveinfo l)
     e _ _ _.
 Obligation 1.
-  destruct e0. destruct ei0. destruct ci0. destruct a. simpl in f, f0, f1.
-  destruct saveinfo0.
+  destruct e0. destruct ei0. destruct ci0. simpl in f, f0.
+  destruct saveinfo.
   - simpl. split.
     + simpl. constructor. auto.
       apply lem_renaming. auto.
     + simpl.
-      split.
-      2: eapply lem_info_nat; auto. eapply lem_info. auto.
+      eapply lem_info. auto.
   - simpl. split.
     + simpl. constructor. auto. apply lem_renaming. auto.
-    + split.
-      ++ simpl. eapply lem_info0. auto.
-      ++ simpl.
-        constructor. auto. eapply lem_info_nat. auto.
-  - simpl. split.
-    + simpl. constructor. auto. apply lem_renaming. auto.
-    + split.
-      ++ simpl. eapply lem_info0. auto.
-      ++ simpl. eapply lem_info_nat. auto.
+    + simpl. eapply lem_info0. auto.
 Qed.
 Next Obligation.
   destruct e0. destruct ei0. simpl. simpl in ck0.
-  destruct saveinfo0.
-  - simpl. rewrite <- lift_renaming_length. lia.
+  destruct saveinfo.
   - simpl. rewrite <- lift_renaming_length. lia.
   - simpl. rewrite <- lift_renaming_length. lia.
 Qed.
 Next Obligation.
   destruct e0. destruct ei0. simpl. simpl in Pl0.
-  destruct saveinfo0.
+  destruct saveinfo.
   - simpl. eapply lemx01. auto.
-  - simpl. eapply lemy01. auto.
   - simpl. eapply lemy01. auto.
 Qed.
 
 Program Definition update_mk {n k nind:nat} {l} (na:aname) (e0:cinfo n k nind l)
-  (saveinfo:saveinfo) : cinfo (S n) k nind (replace_info_len saveinfo l):=
+  (saveinfo:option string) : cinfo (S n) k nind (replace_info_len saveinfo l):=
   let e := ei e0 in
   let info :=
     map (
       fun  x => (fst x, (plus_one_index (snd x)))
     ) e.(info)
   in
-  let info_nat := map (
+  (* let info_nat := map (
     fun x => (x.1, S x.2)
-  ) e.(info_nat) in
+  ) e.(info_nat) in *)
   let renaming := lift_renaming e.(renaming) in
   let item := mkdecl na None 0 in
   let e := match saveinfo with
-    | NoSave => mkinfo renaming info info_nat e.(info_source) e.(kn)
-    | Saveitem str => mkinfo renaming info ((str, 0)::info_nat) e.(info_source) e.(kn)
-    | Savelist str => mkinfo renaming (replace_add_info info str item) info_nat e.(info_source) e.(kn)    end
+    | None => mkinfo renaming info e.(info_source) e.(kn)
+    | Some str => mkinfo renaming (replace_add_info info str item) e.(info_source) e.(kn)    end
   in
   @mkcinfo (S n) k nind (replace_info_len saveinfo l)
     e _ _ _ .
 Obligation 1.
-  destruct saveinfo0.
+  destruct saveinfo.
   - destruct e0.
-    destruct ei0. destruct ci0. destruct a. simpl in f, f0, f1.
+    destruct ei0. destruct ci0. simpl in f, f0.
     simpl.
     split.
     + simpl.
       apply lem_renaming. auto.
-    + simpl.
-      split.
-      2: eapply lem_info_nat; auto. eapply lem_info. auto.
-  - destruct e0. destruct ei0. destruct ci0. destruct a. simpl in f, f0, f1.
+    + simpl. eapply lem_info. auto.
+  - destruct e0. destruct ei0. destruct ci0. simpl in f, f0.
     simpl. split.
     + simpl. auto. apply lem_renaming. auto.
-    + split.
-      ++ simpl. eapply lem_info0. auto.
-      ++ simpl.
-        constructor. auto. eapply lem_info_nat. auto.
-  - destruct e0. destruct ei0. destruct ci0. destruct a. simpl in f, f0, f1. simpl. split.
-    + simpl. auto. apply lem_renaming. auto.
-    + split.
-      ++ simpl. eapply lem_info0. auto.
-      ++ simpl. eapply lem_info_nat. auto.
+    + simpl. eapply lem_info0. auto.
 Qed.
 Next Obligation.
-  destruct saveinfo0.
-  - destruct e0. simpl. rewrite <- lift_renaming_length. lia.
+  destruct saveinfo.
   - destruct e0. simpl. rewrite <- lift_renaming_length. lia.
   - destruct e0. simpl. rewrite <- lift_renaming_length. lia.
 Qed.
 Next Obligation.
   destruct e0. destruct ei0. simpl. simpl in Pl0.
-  destruct saveinfo0.
+  destruct saveinfo.
   - simpl. eapply lemx01. auto.
-  - simpl. eapply lemy01. auto.
   - simpl. eapply lemy01. auto.
 Qed.
 
-Lemma lem_lookup_item {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
+(* Lemma lem_lookup_item {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
   lookup_item (ei e) str < n.
 Proof.
   destruct e. simpl.
@@ -473,47 +442,7 @@ Program Definition rel_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l) : 
 Obligation 1.
   apply Compare_dec.leb_correct.
   eapply lem_lookup_item.
-Defined.
-
-Lemma lem_lookup_list {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
-  Forall (fun x => Nat.ltb  (decl_type x) n) ((lookup_list (ei e) str)).
-Proof.
-  destruct e. destruct ei0.
-  simpl.
-  destruct ci0. destruct H0. clear H H1. unfold lookup_list. simpl.
-  destruct (find
-  (fun
-     i :
-      string
-      ×
-      list
-      (BasicAst.context_decl
-      nat) =>
-   let
-     (na',
-      _) :=
-     i in
-   String.eqb
-     str na')
-  info0) eqn:eq0.
-  - destruct p. simpl in H0.
-    apply find_some in eq0.
-    destruct eq0.
-    rewrite Forall_forall in H0.
-    pose (h0 := H0 (t,l0) H). simpl in h0.
-    rewrite Forall_map in h0. auto.
-  - auto.
-Qed.
-
-
-Program Definition rels_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l): list (cterm n):=
-  rev (map_In (lookup_list (ei e) na)
-    (fun x xinl => exist _ (tRel (decl_type x)) _)).
-Next Obligation.
-  pose (h0 := lem_lookup_list e na).
-  rewrite Forall_forall in h0.
-  pose (h1 := h0 x xinl). auto.
-Qed.
+Defined. *)
 
 
 Program Definition geti_rename {n m nind:nat} {l} (e:cinfo n m nind l) (i:nat) (h:i<m) :cterm n :=
@@ -582,7 +511,7 @@ Next Obligation.
             let (na', _) := i in
             String.eqb na na') info0 ) eqn:e0.
   + eapply find_some in e0. destruct e0.
-    destruct ci0. destruct a.
+    destruct ci0.
     simpl in f0.
     assert (let '(_,l) := p in Forall
               (fun x : nat => PeanoNat.Nat.ltb x n)
@@ -600,4 +529,47 @@ Next Obligation.
       eapply in_map. auto.
       eapply H2 in H4. auto. auto.
   + inversion H.
+Qed.
+
+Program Definition rel_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l)
+  (h:within_info e na 0) : cterm n :=
+  geti_info na e 0 h.
+
+Lemma lem_lookup_list {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
+  Forall (fun x => Nat.ltb  (decl_type x) n) ((lookup_list (ei e) str)).
+Proof.
+  destruct e. destruct ei0.
+  simpl.
+  destruct ci0. clear H. unfold lookup_list. simpl.
+  destruct (find
+  (fun
+     i :
+      string
+      ×
+      list
+      (BasicAst.context_decl
+      nat) =>
+   let
+     (na',
+      _) :=
+     i in
+   String.eqb
+     str na')
+  info0) eqn:eq0.
+  - destruct p. simpl in H0.
+    apply find_some in eq0.
+    destruct eq0.
+    rewrite Forall_forall in H0.
+    pose (h0 := H0 (t,l0) H). simpl in h0.
+    rewrite Forall_map in h0. auto.
+  - auto.
+Qed.
+
+Program Definition rels_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l): list (cterm n):=
+  rev (map_In (lookup_list (ei e) na)
+    (fun x xinl => exist _ (tRel (decl_type x)) _)).
+Next Obligation.
+  pose (h0 := lem_lookup_list e na).
+  rewrite Forall_forall in h0.
+  pose (h1 := h0 x xinl). auto.
 Qed.
