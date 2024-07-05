@@ -205,7 +205,7 @@ Local Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
   end.
 
 (*return the [i]th element of the [e.(renaming)].
-  Only used in rename_transformor currently*)
+  Only used in mapt currently*)
 Local Definition geti_rename (e:infolocal) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
   (nth i l todo).
@@ -358,15 +358,55 @@ Definition is_rec_call (e:infolocal) i : option nat:=
 (* Transform the `type term` in the source
           to the `type term` in the target
 *)
-Definition rename (e:infolocal) (t:term) : term:=
+Definition mapt (e:infolocal) (t:term) : term:=
   let n_ind := length (lookup_list e.(info_source) "rels_of_T") in
   let fix Ffix e t :=
     match t with
     | tRel k => geti_rename e k
-    | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
-    | tLambda name t1 t2 => tLambda name (Ffix e t1) (Ffix (update_kp name e NoSave) t2)
+    | tEvar m tl => tEvar m (map (Ffix e) tl)
+    | tCast t1 ck t2 => tCast (Ffix e t1) ck (Ffix e t2)
     | tProd na t1 t2 => tProd na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
-    | _ => t (* todo *)
+    | tLambda na t1 t2 => tLambda na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
+    | tLetIn na t0 t1 t2 => tLetIn na (Ffix e t0) (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
+    | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
+    | tProj pj t => tProj pj (Ffix e t)
+    | tArray l arr t1 t2 => tArray l (map (Ffix e) arr) (Ffix e t1) (Ffix e t2)
+    | tCase ci p t0 bs =>
+        tCase ci
+          (mk_predicate
+            p.(puinst) (map (Ffix e) p.(pparams)) p.(pcontext)
+            (Ffix (fold_right (fun na e => update_kp na e NoSave) e p.(pcontext)) p.(preturn))
+            )
+          (Ffix e t0)
+          (map (fun b => mk_branch b.(bcontext)
+            (Ffix (fold_right (fun na e => update_kp na e NoSave) e b.(bcontext)) b.(bbody)) ) bs)
+    | tFix mfix n =>
+        let e' :=
+          fold_left (fun e def => update_kp def.(dname) e NoSave) mfix e
+        in
+        tFix
+          (map
+              (fun def =>
+                  mkdef _
+                    def.(dname)
+                    (Ffix e def.(dtype))
+                    (Ffix e' def.(dbody))
+                    def.(rarg))
+            mfix) n
+    | tCoFix mfix n =>
+        let e' :=
+          fold_left (fun e def => update_kp def.(dname) e NoSave) mfix e
+        in
+        tCoFix
+          (map (fun def =>
+                  mkdef _
+                    def.(dname)
+                    (Ffix e def.(dtype))
+                    (Ffix e' def.(dbody))
+                    def.(rarg))
+            mfix) n
+    | tVar _ | tSort _ | tConst _ _
+    | tInd _ _ | tConstruct _ _ _ | tInt _ | tFloat _ => t
   end in
   Ffix e t.
 
@@ -402,7 +442,7 @@ Section term_generation.
             fun e =>
               kptbind saveinfo decl.(decl_name) e
                 (tp e decl)
-                (* (rename e decl.(decl_type)) *)
+                (* (mapt e decl.(decl_type)) *)
                 t
           )
     end in
@@ -421,17 +461,17 @@ Section term_generation.
             let e0 := update_mk decl.(decl_name) e0 saveinfo in
             bind decl.(decl_name)
               (tp e decl)
-              (* (rename e decl.(decl_type)) *)
+              (* (mapt e decl.(decl_type)) *)
               (t e' e0)
           )
     end in
     Ffix ctx e e (fun (_:infolocal) => t).
 
   Definition it_kptbind_default saveinfo ctx e t :=
-    it_kptbind saveinfo ctx (fun e decl => rename e decl.(decl_type)) e t.
+    it_kptbind saveinfo ctx (fun e decl => mapt e decl.(decl_type)) e t.
 
   Definition it_mktbind_default saveinfo ctx e t :=
-    it_mktbind saveinfo ctx (fun e decl => rename e decl.(decl_type)) e t.
+    it_mktbind saveinfo ctx (fun e decl => mapt e decl.(decl_type)) e t.
 
 End term_generation.
 

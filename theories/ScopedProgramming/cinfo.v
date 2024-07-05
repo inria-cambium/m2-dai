@@ -319,9 +319,9 @@ Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) 
   cinfo (S n) (S k) nind (replace_info_len saveinfo l) :=
   let e := ei e in
   let item := mkdecl na None 0 in
-  let item_rename := mkdecl na None (tRel 0) in
+  let item_mapt := mkdecl na None (tRel 0) in
   let renaming :=
-    item_rename ::
+    item_mapt ::
       (lift_renaming e.(renaming))
   in
   let info :=

@@ -124,7 +124,36 @@ Print indp_acc.
   non-uniform parameter,
 
   Notice that the (type of) uniform parameter cannot depend on the non-uniform parameters.
-
-
-
 *)
+
+
+
+
+(* strange test case *)
+Inductive myt0 (A:Type) (B: Type) : Type :=
+  | Build0 (x:A) (b:B) (c:
+    (fun x => match x with
+    | 0 => A
+    | _ => A end) (3)
+  ).
+MetaCoq Run Derive InductivePrinciple myt0 as "indp_myt0".
+Print indp_myt0.
+
+(* Load MetaCoqPrelude.
+Definition thisfile := $run (tmCurrentModPath tt).
+Definition input := ($run (tmQuoteInductive (thisfile, "myt"))).
+Print input. *)
+(* MetaCoq Run PrintInductivePrinciple myt. *)
+(* MetaCoq Run Derive InductivePrinciple myt as "indp_myt".
+Print indp_myt. *)
+
+Inductive myt (A:Type) (B: Type) : Type :=
+  | Build (x:A) (b:B) (c:
+    (let fix f x :=
+      match x with
+      | 0 => A
+      | S n' => f n' end in f 3
+    )
+  ).
+MetaCoq Run Derive InductivePrinciple myt as "indp_myt".
+Print indp_myt.

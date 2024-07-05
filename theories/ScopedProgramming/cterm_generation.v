@@ -41,39 +41,39 @@ Qed.
 
 Unset Guard Checking.
 (*todo todo todo todo todo*)
-Program Fixpoint Ffix_rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:closedn m t)
+Program Fixpoint Ffix_mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:closedn m t)
   {struct t}: cterm n :=
   match t with
   | tRel k =>  geti_rename e k _
   | tVar ident => cVar ident
-  | tEvar m tl => cEvar m (map_In tl (fun t h' => Ffix_rename e t _))
+  | tEvar m tl => cEvar m (map_In tl (fun t h' => Ffix_mapt e t _))
   | tSort sort => cSort sort
-  | tCast t1 ck t2 => cCast (Ffix_rename e t1 _) ck (Ffix_rename e t2 _)
+  | tCast t1 ck t2 => cCast (Ffix_mapt e t1 _) ck (Ffix_mapt e t2 _)
   | tProd na t1 t2 =>
     cProd na
-      (Ffix_rename  e t1 _)
-      (Ffix_rename (update_kp na e None) t2 _)
+      (Ffix_mapt  e t1 _)
+      (Ffix_mapt (update_kp na e None) t2 _)
   | tLambda na t1 t2 =>
     cLambda na
-      (Ffix_rename e t1 _)
-      (Ffix_rename (update_kp na e None) t2 _)
+      (Ffix_mapt e t1 _)
+      (Ffix_mapt (update_kp na e None) t2 _)
   | tLetIn na t0 t1 t2 =>
-    cLetIn na (Ffix_rename e t0 _) (Ffix_rename e t1 _)
-      (Ffix_rename (update_kp na e None) t2 _)
+    cLetIn na (Ffix_mapt e t0 _) (Ffix_mapt e t1 _)
+      (Ffix_mapt (update_kp na e None) t2 _)
   | tApp tx tl =>
-    cApp (Ffix_rename  e tx _)
-      (map_In tl (fun t h' => Ffix_rename e t _ ))
+    cApp (Ffix_mapt  e tx _)
+      (map_In tl (fun t h' => Ffix_mapt e t _ ))
   | tConst ind instance => cConst ind instance
   | tInd ind instance => cInd ind instance
   | tConstruct ind m instance => cConstruct ind m instance
   | tCase _ _ _ _ => exist _ t todo
-  | tProj pj t => cProj pj (Ffix_rename e t _)
+  | tProj pj t => cProj pj (Ffix_mapt e t _)
   | tFix _ _ | tCoFix _ _ => exist _ t todo
   | tInt i => cInt i
   | tFloat f => cFloat f
   | tArray l arr t1 t2 =>
-    cArray l (map_In arr (fun t h' => Ffix_rename e t _))
-      (Ffix_rename e t1 _) (Ffix_rename e t2 _)
+    cArray l (map_In arr (fun t h' => Ffix_mapt e t _))
+      (Ffix_mapt e t1 _) (Ffix_mapt e t2 _)
   end.
 Next Obligation. apply Compare_dec.leb_complete in h. auto. Qed.
 Next Obligation. eapply forallb_Forall in h. eapply Forall_forall in h. 2:exact h'. auto. Qed.
@@ -105,8 +105,8 @@ Qed.
 
 Set Guard Checking.
 
-Definition rename {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:=
-  Ffix_rename e (proj1_sig t) (proj2_sig t).
+Definition mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:=
+  Ffix_mapt e (proj1_sig t) (proj2_sig t).
 
 
 Definition add_info_len (l:list (string*nat)) si i :=
@@ -143,7 +143,7 @@ Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
         Ffix_kpcProd saveinfo ctx' e
           (fun e' =>
             kpcProd saveinfo a.(decl_name) e'
-              (rename e' (a.(decl_type)))
+              (mapt e' (a.(decl_type)))
               (fun e'' => cterm_lift _ (t (mkcinfo (ei e'') _ _ _) )))
     end
   )  eq_refl eq_refl.
@@ -406,7 +406,7 @@ Program Fixpoint Ffix_mkcProd' {n k nind m:nat} {l} (saveinfo:string)
       (* let ea' := update_kp a.(decl_name) ea saveinfo in *)
       (* let eb' := update_mk a.(decl_name) eb saveinfo in *)
         cProd a.(decl_name)
-          (rename ea a.(decl_type))
+          (mapt ea a.(decl_type))
           (cterm_lift _  $
             t
               (mkcinfo (ei (update_kp a.(decl_name) ea (Some saveinfo))) _ _ _)

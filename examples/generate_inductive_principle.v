@@ -45,7 +45,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
         let transformer_result :infolocal -> term := fun e =>
           tApp (rel_of "P" e)
             (
-              (map (rename e) ctr.(cstr_indices))
+              (map (mapt e) ctr.(cstr_indices))
               ++
               [tApp constructor_current
                 (rels_of "params" e ++ rels_of "args" e)]
@@ -71,7 +71,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
             | None =>
               (*save the argument n into information list "args"*)
               kptProd (Savelist "args") na e
-                (rename e t1)
+                (mapt e t1)
                 t
             end
           (*ex. vec A n*)
@@ -82,30 +82,30 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
               e <-
                 mktProd (Savelist "args") na e
                   (*type of v: vec A n*)
-                  (tApp (tInd the_inductive []) (map (rename e) tl));;
+                  (tApp (tInd the_inductive []) (map (mapt e) tl));;
 
               (* P n v -> [t]*)
               kptProd NoSave the_name e
                 (tApp
                   (rel_of "P" e)
                   (let tl := n_tl tl (length params) in
-                    (map (rename e) tl) (*n*) ++ [geti_info "args" e 0 (*tRel 0*)] (*v*))
+                    (map (mapt e) tl) (*n*) ++ [geti_info "args" e 0 (*tRel 0*)] (*v*))
                 ) t
             | None =>
               kptProd (Savelist "args") na e
-                (rename e t1)
+                (mapt e t1)
                 t
             end
           (**********************)
           | tProd na _ _ =>
             match check_return_type t1 e with
-            | None => kptProd (Savelist "args") na e (rename e t1) t
+            | None => kptProd (Savelist "args") na e (mapt e t1) t
             | Some _ =>
               let fix aux_nested e t1 :=
                 match t1 with
                 | tProd na ta tb =>
                   kptProd (Savelist "arglambda") na e
-                    (rename e ta) (fun e => aux_nested e tb)
+                    (mapt e ta) (fun e => aux_nested e tb)
                 | tRel _ =>
                   match is_rec_call e i with
                   | None => todo
@@ -119,17 +119,17 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
                   | Some kk =>
                     tApp (rel_of "P" e)
                       (let tl := n_tl tl (length params) in
-                        (map (rename e) tl) ++
+                        (map (mapt e) tl) ++
                         [tApp (geti_info "args" e 0) (rels_of "arglambda" e)])
                   end
                 | _ => todo
                 end in
-              e <- mktProd (Savelist "args") na e (rename e t1);;
+              e <- mktProd (Savelist "args") na e (mapt e t1);;
               kptProd NoSave the_name e (aux_nested e t1) t
             end
           (**********************)
           | _ => kptProd (Savelist "args") na e
-                  (rename e t1)
+                  (mapt e t1)
                   t
           end
         in
@@ -225,7 +225,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
             (
               rels_of "no_uniform_params" e
               ++
-              (map (rename e) ctr.(cstr_indices))
+              (map (mapt e) ctr.(cstr_indices))
               ++
               [tApp constructor_current
                 (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
@@ -252,7 +252,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                     t)
             | None =>
               kptProd (Savelist "args") na e
-                (rename e t1)
+                (mapt e t1)
                 t
             end
           | tApp (tRel i) tl =>
@@ -264,29 +264,29 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                     (tInd
                       {| inductive_mind := kername; inductive_ind := (*todo*) n_ind -1 - kk |}
                       [])
-                    (map (rename e) tl))
+                    (map (mapt e) tl))
                 (fun e =>
                   kptProd NoSave the_name e
                     (tApp
                       (geti_info "P" e kk)
                       (let tl := n_tl tl (length params) in
-                        (map (rename e) tl) ++ [(geti_info "args" e 0)])
+                        (map (mapt e) tl) ++ [(geti_info "args" e 0)])
                     ) t)
             | None =>
               kptProd (Savelist "args") na e
-                (rename e t1)
+                (mapt e t1)
                 t
             end
           (*****************************************)
           | tProd na _ _ =>
             match check_return_type t1 e with
-            | None => kptProd (Savelist "args") na e ( rename e t1) t
+            | None => kptProd (Savelist "args") na e ( mapt e t1) t
             | Some _ =>
               let fix aux_nested e t1 :=
                 match t1 with
                 | tProd na ta tb =>
                   kptProd (Savelist "arglambda") na e
-                    (rename e ta) (fun e => aux_nested e tb)
+                    (mapt e ta) (fun e => aux_nested e tb)
                 | tRel i =>
                   match is_rec_call e i with
                   | None => todo
@@ -300,16 +300,16 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                   | Some kk =>
                     tApp (geti_info "P" e kk)
                       (let tl := n_tl tl (length params) in
-                        (map (rename e) tl) ++
+                        (map (mapt e) tl) ++
                         [tApp (geti_info "args" e 0) (rels_of "arglambda" e)])
                   end
                 | _ => todo end in
-              mktProd (Savelist "args") na e (rename e t1)
+              mktProd (Savelist "args") na e (mapt e t1)
                 (fun e => kptProd NoSave the_name e (aux_nested e t1) t)
             end
           (*****************************************)
           | _ => kptProd (Savelist "args") na e
-                  (rename e t1)
+                  (mapt e t1)
                   t
           end
         in

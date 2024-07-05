@@ -152,7 +152,7 @@ Record infolocal : Type := mkinfo {
   renaming : list (BasicAst.context_decl nat);
   info : list (string * information) ;
   info_source : list (string * information) ;
-  kn : kername; }.    
+  kn : kername; }.
 \end{lstlisting}
 The local information. For simplicity of explication, we will regard \coqe{renaming, information_list} as a list of natural numbers in the rest.
 
@@ -205,10 +205,17 @@ Definition rel_of (na:string) (e:infolocal): term
 \end{lstlisting}
 Get the \coqe{information_nat} named \coqe{na} of \coqe{e.(info)}, and get its value \coqe{k}, return \coqe{tRel k}.
 
+\item
+\begin{lstlisting}[language = {Coq}, basicstyle = \small]
+Definition mapt (e:infolocal) (t:term) : term
+\end{lstlisting}
+Transform the term in the source to the term in the target by using the \coqe{renaming} map.
+
+% For example, transforme the \coqe{(tRel i)} to the \coqe{i}th element of \coqe{e.(renaming)}.
 
 
 
-% For example, 
+% For example,
 
 % \coqe{Inductive vec (A:Type):nat -> Type:= ... cons : A -> forall (n:nat), vec A n -> vec A (S n)}, the \coqe{vec} of \coqe{vec A n} is represented by \coqe{tRel 3} in the quotation. If we make good use of our method, the local information \coqe{e} should always be updated correctly, when we call this function at this point (\coqe{vec}) with \coqe{e,3}, the result will be \coqe{Some 0}.
 
@@ -238,14 +245,6 @@ For a local information \coqe{e}, by checking \coqe{e.(info_source)}, see whethe
 
 If \coqe{(tRel i)} refers to the type name of the $k$th inductive body, return \coqe{Some k}; Otherwise, return \coqe{None}.
 
-
-
-\item
-\begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition rename (e:infolocal) (t:term) : term
-\end{lstlisting}
-Renaming transformation, transform the term \coqe{t} according to the renaming map. i.e. for each subterm \coqe{(tRel i)} of \coqe{t},
-use the former function to check if it refers to the type name, if it is the case, maps it to the term of the type (a tInd term); otherwise, maps it to \coqe{(geti_rename e i)}. 
 
 \end{itemize}
 
@@ -674,19 +673,19 @@ let auxarg arg (t:infolocal -> term): infolocal -> term :=
       (*save the argument v into information list "args"*)
       e <- mktProd (Savelist "args") na e
         (*type of v: vec A n*)
-        (tApp (tInd the_inductive []) (map (rename e) tl));;
-      (* P n v -> t*)    
+        (tApp (tInd the_inductive []) (map (mapt e) tl));;
+      (* P n v -> t*)
       kptProd NoSave the_name e
         (tApp
           (rel_of "P" e) (*P*)
           (let tl := n_tl tl (length params) in 
             (*do x times List.tl, i.e. remove the params*)
-            (map (rename e) tl) (*n*) 
+            (map (mapt e) tl) (*n*) 
              ++ [geti_info "args" e 0] (*v*))
         ) t
     | None =>
       kptProd (Savelist "args") na e
-        (rename e t1)
+        (mapt e t1)
         t
     end
   |...
