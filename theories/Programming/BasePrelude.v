@@ -489,6 +489,11 @@ Definition it_mktLambda := it_mktbind tLambda.
 Definition it_kptLambda_default := it_kptbind_default tLambda.
 Definition it_mktLambda_default := it_mktbind_default tLambda.
 
+
+Definition kptLetIn (saveinfo:saveinfo) na e (t0:term) (t1:term) (t2:infolocal -> term) :=
+  let e' := update_kp na e saveinfo in
+  tLetIn na t0 t1 (t2 e').
+
 (*
 Remark: how to choose [mktbind] [kptbind]:
 

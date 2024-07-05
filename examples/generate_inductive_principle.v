@@ -231,86 +231,89 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
                 (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
             )
         in
-        let auxarg arg (t:infolocal->term) :infolocal -> term :=
+        let auxarg arg (t:infolocal->term) :infolocal -> term := fun e =>
           let t1 := arg.(decl_type) in
           let na := arg.(decl_name) in
-          fun e =>
-          match t1 with
-          | tRel i =>
-            match is_rec_call e i with
-            | Some kk =>
-              mktProd (Savelist "args") na e
-                (
-                  (tInd
-                    {| inductive_mind := kername; inductive_ind := (*todo*) n_ind -1 - kk |}
-                    [])
-                )
-                (fun e =>
-                  kptProd NoSave the_name e
-                    (
-                      tApp (geti_info "P" e kk) (*tRel 0*)[geti_info "args" e 0])
-                    t)
-            | None =>
-              kptProd (Savelist "args") na e
-                (mapt e t1)
-                t
-            end
-          | tApp (tRel i) tl =>
-            match is_rec_call e i with
-            | Some kk =>
-              mktProd (Savelist "args") na e
-                (
-                  tApp
+          match arg.(decl_body) with
+          | Some t0 => kptLetIn NoSave na e (mapt e t0) (mapt e t1) t
+          | None =>
+            match t1 with
+            | tRel i =>
+              match is_rec_call e i with
+              | Some kk =>
+                mktProd (Savelist "args") na e
+                  (
                     (tInd
                       {| inductive_mind := kername; inductive_ind := (*todo*) n_ind -1 - kk |}
                       [])
-                    (map (mapt e) tl))
-                (fun e =>
-                  kptProd NoSave the_name e
-                    (tApp
-                      (geti_info "P" e kk)
-                      (let tl := n_tl tl (length params) in
-                        (map (mapt e) tl) ++ [(geti_info "args" e 0)])
-                    ) t)
-            | None =>
-              kptProd (Savelist "args") na e
-                (mapt e t1)
-                t
-            end
-          (*****************************************)
-          | tProd na _ _ =>
-            match check_return_type t1 e with
-            | None => kptProd (Savelist "args") na e ( mapt e t1) t
-            | Some _ =>
-              let fix aux_nested e t1 :=
-                match t1 with
-                | tProd na ta tb =>
-                  kptProd (Savelist "arglambda") na e
-                    (mapt e ta) (fun e => aux_nested e tb)
-                | tRel i =>
-                  match is_rec_call e i with
-                  | None => todo
-                  | Some kk =>
-                    tApp (geti_info "P" e kk)
-                      [tApp (geti_info "args" e 0) (rels_of "arglambda" e)]
-                  end
-                | tApp (tRel i) tl =>
-                  match is_rec_call e i with
-                  | None => todo
-                  | Some kk =>
-                    tApp (geti_info "P" e kk)
-                      (let tl := n_tl tl (length params) in
-                        (map (mapt e) tl) ++
-                        [tApp (geti_info "args" e 0) (rels_of "arglambda" e)])
-                  end
-                | _ => todo end in
-              mktProd (Savelist "args") na e (mapt e t1)
-                (fun e => kptProd NoSave the_name e (aux_nested e t1) t)
-            end
-          (*****************************************)
-          | _ => kptProd (Savelist "args") na e
+                  )
+                  (fun e =>
+                    kptProd NoSave the_name e
+                      (
+                        tApp (geti_info "P" e kk) (*tRel 0*)[geti_info "args" e 0])
+                      t)
+              | None =>
+                kptProd (Savelist "args") na e
                   (mapt e t1)
                   t
+              end
+            | tApp (tRel i) tl =>
+              match is_rec_call e i with
+              | Some kk =>
+                mktProd (Savelist "args") na e
+                  (
+                    tApp
+                      (tInd
+                        {| inductive_mind := kername; inductive_ind := (*todo*) n_ind -1 - kk |}
+                        [])
+                      (map (mapt e) tl))
+                  (fun e =>
+                    kptProd NoSave the_name e
+                      (tApp
+                        (geti_info "P" e kk)
+                        (let tl := n_tl tl (length params) in
+                          (map (mapt e) tl) ++ [(geti_info "args" e 0)])
+                      ) t)
+              | None =>
+                kptProd (Savelist "args") na e
+                  (mapt e t1)
+                  t
+              end
+            (*****************************************)
+            | tProd na _ _ =>
+              match check_return_type t1 e with
+              | None => kptProd (Savelist "args") na e ( mapt e t1) t
+              | Some _ =>
+                let fix aux_nested e t1 :=
+                  match t1 with
+                  | tProd na ta tb =>
+                    kptProd (Savelist "arglambda") na e
+                      (mapt e ta) (fun e => aux_nested e tb)
+                  | tRel i =>
+                    match is_rec_call e i with
+                    | None => todo
+                    | Some kk =>
+                      tApp (geti_info "P" e kk)
+                        [tApp (geti_info "args" e 0) (rels_of "arglambda" e)]
+                    end
+                  | tApp (tRel i) tl =>
+                    match is_rec_call e i with
+                    | None => todo
+                    | Some kk =>
+                      tApp (geti_info "P" e kk)
+                        (let tl := n_tl tl (length params) in
+                          (map (mapt e) tl) ++
+                          [tApp (geti_info "args" e 0) (rels_of "arglambda" e)])
+                    end
+                  | _ => todo end in
+                mktProd (Savelist "args") na e (mapt e t1)
+                  (fun e => kptProd NoSave the_name e (aux_nested e t1) t)
+              end
+            (*****************************************)
+            | _ => kptProd (Savelist "args") na e
+                    (mapt e t1)
+                    t
+            end
           end
         in
         let fix transformer_args args t: infolocal -> term :=
