@@ -430,7 +430,12 @@ Section term_generation.
     let e' := update_mk na e saveinfo in
     bind na (t1) (t2 e').
 
-  Definition it_kptbind (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
+  Definition kptLetIn (saveinfo:saveinfo) na e (t0:term) (t1:term) (t2:infolocal -> term) :=
+    let e' := update_kp na e saveinfo in
+    tLetIn na t0 t1 (t2 e').
+
+
+  Definition it_kptbind (saveinfo:option string) (ctx:context) (tp:infolocal -> term -> term) (e:infolocal) (t: infolocal -> term) : term :=
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -438,17 +443,24 @@ Section term_generation.
       match ctx with
       | [] => t e
       | decl :: ctx' =>
-          Ffix ctx' e (
-            fun e =>
-              kptbind saveinfo decl.(decl_name) e
-                (tp e decl)
-                (* (mapt e decl.(decl_type)) *)
-                t
-          )
-    end in
+        match decl.(decl_body) with
+        | None =>
+            Ffix ctx' e (
+              fun e =>
+                kptbind saveinfo decl.(decl_name) e
+                  (tp e decl.(decl_type)) t
+            )
+        | Some t0 =>
+            Ffix ctx' e (
+              fun e =>
+                kptLetIn NoSave (*todo*) decl.(decl_name) e
+                  (tp e t0) (tp e decl.(decl_type)) t
+            )
+        end
+      end in
     Ffix ctx e t.
 
-  Definition it_mktbind (saveinfo:option string) (ctx:context) (tp:infolocal -> context_decl -> term) (e:infolocal) (t: infolocal -> term) : term :=
+  Definition it_mktbind (saveinfo:option string) (ctx:context) (tp:infolocal -> term -> term) (e:infolocal) (t: infolocal -> term) : term :=
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -456,24 +468,35 @@ Section term_generation.
       match ctx with
       | [] => t e e0
       | decl :: ctx' =>
-          Ffix ctx' e e0 (fun e e0 =>
-            let e' := update_kp decl.(decl_name) e saveinfo in
-            let e0 := update_mk decl.(decl_name) e0 saveinfo in
-            bind decl.(decl_name)
-              (tp e decl)
-              (* (mapt e decl.(decl_type)) *)
-              (t e' e0)
-          )
-    end in
+        match decl.(decl_body) with
+        | None =>
+            Ffix ctx' e e0 (fun e e0 =>
+              let e' := update_kp decl.(decl_name) e saveinfo in
+              let e0 := update_mk decl.(decl_name) e0 saveinfo in
+              bind decl.(decl_name)
+                (tp e decl.(decl_type))
+                (t e' e0)
+            )
+        | Some t0 =>
+            Ffix ctx' e e0 (fun e e0 =>
+              let e' := update_kp decl.(decl_name) e NoSave (*todo*)in
+              let e0 := update_mk decl.(decl_name) e0 NoSave (*todo*)in
+              tLetIn decl.(decl_name) (tp e t0)
+                (tp e decl.(decl_type)) (t e' e0)
+            )
+        end
+      end in
     Ffix ctx e e (fun (_:infolocal) => t).
 
   Definition it_kptbind_default saveinfo ctx e t :=
-    it_kptbind saveinfo ctx (fun e decl => mapt e decl.(decl_type)) e t.
+    it_kptbind saveinfo ctx mapt e t.
 
   Definition it_mktbind_default saveinfo ctx e t :=
-    it_mktbind saveinfo ctx (fun e decl => mapt e decl.(decl_type)) e t.
+    it_mktbind saveinfo ctx mapt e t.
 
 End term_generation.
+
+(* Print kptLetIn. *)
 
 Definition kptProd := kptbind tProd.
 Definition mktProd := mktbind tProd.
@@ -490,9 +513,6 @@ Definition it_kptLambda_default := it_kptbind_default tLambda.
 Definition it_mktLambda_default := it_mktbind_default tLambda.
 
 
-Definition kptLetIn (saveinfo:saveinfo) na e (t0:term) (t1:term) (t2:infolocal -> term) :=
-  let e' := update_kp na e saveinfo in
-  tLetIn na t0 t1 (t2 e').
 
 (*
 Remark: how to choose [mktbind] [kptbind]:

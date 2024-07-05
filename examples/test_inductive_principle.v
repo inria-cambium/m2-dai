@@ -169,12 +169,12 @@ MetaCoq Run Derive InductivePrinciple myt1 as "indp_myt1".
 Print indp_myt1.
 
 
-(* Load MetaCoqPrelude.
-Definition thisfile := $run (tmCurrentModPath tt).  *)
 
-Inductive testletin : Type :=
+Inductive testletin : let x := nat in x -> Type :=
   | C0: (let x := nat in x) -> (let y := option nat in prod y y ->
-          nat) -> let z := nat in let w := z in w -> testletin.
+          nat) -> let z := nat in let w := z in w -> testletin 0.
+MetaCoq Run Derive InductivePrinciple testletin as "indp_testletin".
+Print indp_testletin.
 (*
 forall P : testletin -> Prop,
        (forall (p : let x := nat in x)
@@ -183,5 +183,16 @@ forall P : testletin -> Prop,
        forall t : testletin, P t
 *)
 (* MetaCoq Run PrintInductivePrinciple testletin. *)
-MetaCoq Run Derive InductivePrinciple testletin as "indp_testletin".
-Print indp_testletin.
+
+(* Load MetaCoqPrelude.
+Definition thisfile := $run (tmCurrentModPath tt).
+Definition input := ($run (tmQuoteInductive (thisfile, "testletin"))).
+Print input.
+
+Print testletin_ind. *)
+
+(* Compute $quote (forall P : let x := nat in testletin -> Prop,
+(forall (p : let x := nat in x)
+   (n : let y := option nat in y × y -> nat),
+ let z := nat in let w := z in forall w0 : w, P (C0 p n w0)) ->
+forall t : testletin, P t). *)
