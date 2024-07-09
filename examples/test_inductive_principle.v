@@ -196,3 +196,52 @@ Print testletin_ind. *)
    (n : let y := option nat in y × y -> nat),
  let z := nat in let w := z in forall w0 : w, P (C0 p n w0)) ->
 forall t : testletin, P t). *)
+
+
+
+(* Print input.
+Print indp_testletin.
+MetaCoq Run PrintInductivePrinciple testletin. *)
+
+
+Inductive mynat'' :Type :=
+  | myz''
+  | mys'' : let x := mynat'' in mynat'' -> mynat''.
+
+MetaCoq Run Derive InductivePrinciple mynat'' as "indp_mynat''".
+Print indp_mynat''.
+
+(* Load MetaCoqPrelude.
+Definition thisfile := $run (tmCurrentModPath tt).
+Definition input := ($run (tmQuoteInductive (thisfile, "mynat'"))).
+Print input. *)
+
+Inductive myvec' (A:Type) : let x := nat in x -> Type :=
+  | myvnil' : myvec' A 0
+  | myvcons' : let a := A in a -> forall n, let z := myvec' in z a n -> myvec' A (S n).
+MetaCoq Run Derive InductivePrinciple myvec' as "indp_myvec'".
+Print indp_myvec'.
+
+(* Load MetaCoqPrelude.
+Definition thisfile := $run (tmCurrentModPath tt).
+Definition input := ($run (tmQuoteInductive (thisfile, "myvec'"))).
+Print input. *)
+
+(* Compute  *)
+
+
+
+Inductive mynat' :Type :=
+  | myz'
+  | mys' : let x := mynat' in let y := x in ((fun z => z ) y) -> mynat'.
+
+(* MetaCoq Run PrintInductivePrinciple mynat'. *)
+
+(* Load MetaCoqPrelude.
+Definition thisfile := $run (tmCurrentModPath tt).
+Definition input := ($run (tmQuoteInductive (thisfile, "mynat'"))).
+Print input. *)
+
+
+MetaCoq Run Derive InductivePrinciple mynat' as "indp_mynat'".
+Print indp_mynat'.

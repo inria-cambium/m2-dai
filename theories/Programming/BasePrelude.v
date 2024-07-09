@@ -158,10 +158,12 @@ Inductive saveinfo:=
   | Saveitem (s:string)
   | NoSave.
 
+(* Print option_map. *)
+
 Local Definition lift_renaming t :=
-  map (fun t => match decl_type t with
-        | tRel i => mkdecl t.(decl_name) t.(decl_body) (tRel (i + 1))
-        | _ => t end) t.
+  map (fun t =>
+        mkdecl t.(decl_name) t.(decl_body) (lift0 1 t.(decl_type))
+  ) t.
 
 Local Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   let item := mkdeclnat na None 0 in
@@ -189,6 +191,34 @@ Local Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   | Savelist str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
   end
   .
+
+Local Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:term) :=
+  let item := mkdeclnat na None 0 in
+  let item_rename := mkdecl na (Some t) (tRel 0) in
+  let renaming :=
+    item_rename :: (lift_renaming e.(renaming))
+  in
+  let info :=
+    map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (plus_one_index l))
+      | (na, information_nat n) => (na, information_nat (1 + n)) end
+    ) e.(info)
+  in
+  let info_source :=
+    map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (plus_one_index l))
+      | (na, information_nat n) => (na, information_nat (1 + n)) end
+    ) e.(info_source)
+  in
+  match saveinfo with
+  | NoSave => mkinfo renaming info info_source e.(kn)
+  | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn)
+  | Savelist str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
+  end
+  .
+
 
 Local Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
   let info := map (
@@ -430,8 +460,8 @@ Section term_generation.
     let e' := update_mk na e saveinfo in
     bind na (t1) (t2 e').
 
-  Definition kptLetIn (saveinfo:saveinfo) na e (t0:term) (t1:term) (t2:infolocal -> term) :=
-    let e' := update_kp na e saveinfo in
+  Definition kptLetIn (saveinfo:saveinfo) na e t00 (t0:term) (t1:term) (t2:infolocal -> term) :=
+    let e' := update_kp_withbody na e saveinfo (t00) in
     tLetIn na t0 t1 (t2 e').
 
 
@@ -453,7 +483,7 @@ Section term_generation.
         | Some t0 =>
             Ffix ctx' e (
               fun e =>
-                kptLetIn NoSave (*todo*) decl.(decl_name) e
+                kptLetIn NoSave (*todo*) decl.(decl_name) e t0
                   (tp e t0) (tp e decl.(decl_type)) t
             )
         end
@@ -584,3 +614,10 @@ Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:infolocal)
   Ffix ctx e acc.
 
 (* Axiom print_info: infolocal -> forall {A}, A. *)
+
+Definition normal e t :option term :=
+  let renaming := e.(renaming) in
+  let ctx :=
+    mapi (fun i t => mkdecl t.(decl_name) t.(decl_body) (tRel i)) renaming
+  in
+  reduce_opt RedFlags.default empty_global_env ctx 100 t.
