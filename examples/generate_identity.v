@@ -61,7 +61,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   let fix transformer (t:term) e (u:infolocal -> term) :term :=
                     match t with
                     | tProd na t1 t2 =>
-                      kptLambda (Savelist "arglambda") na e
+                      kptLambda (Savelist "arglambda") e na
                         (mapt e t1)
                         (fun e => transformer t2 e u)
                     | tApp (tRel j) tl =>
@@ -99,9 +99,9 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
       dname := {| binder_name := nNamed "id" ;
                   binder_relevance := Relevant |};
       dtype :=
-        e <- it_kptProd_default (Some "params") (params) (initial_info);;
-        e <- it_mktProd_default (Some "indices") (indices) e ;;
-        e <- mktProd NoSave the_name e
+        e <- it_kptProd_default (Some "params") (initial_info) params;;
+        e <- it_mktProd_default (Some "indices") e indices;;
+        e <- mktProd NoSave e the_name
               (tApp (tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;
         tApp (tInd the_inductive Instance.empty)
@@ -109,9 +109,9 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
 
       (*params is in reverse order*)
       dbody :=
-        e <- it_kptLambda_default (Some "params") (params) (initial_info);;
-        e <- it_mktLambda_default (Some "indices") (rev indices) e;;
-        e <- mktLambda (Saveitem "x") the_name e
+        e <- it_kptLambda_default (Some "params") (initial_info) params;;
+        e <- it_mktLambda_default (Some "indices") e (rev indices);;
+        e <- mktLambda (Saveitem "x") e the_name
               (tApp (tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;
         fancy_tCase e

@@ -121,7 +121,6 @@ Record infolocal : Type := mkinfo {
 }.
 
 
-
 Local Definition add_listinfo e na l :infolocal :=
   mkinfo e.(renaming) ((na, information_list l)::e.(info)) e.(info_source) e.(kn).
 
@@ -452,20 +451,20 @@ Section term_generation.
     [t1]:       the type of new variable
     [t2]:       the term (need to be fed with infolocal)
   *)
-  Definition kptbind (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
+  Definition kptbind (saveinfo:saveinfo) e na (t1:term) (t2:infolocal -> term) :=
     let e' := update_kp na e saveinfo in
     bind na (t1) (t2 e').
 
-  Definition mktbind (saveinfo:saveinfo) na e (t1:term) (t2:infolocal -> term) :=
+  Definition mktbind (saveinfo:saveinfo) e na (t1:term) (t2:infolocal -> term) :=
     let e' := update_mk na e saveinfo in
     bind na (t1) (t2 e').
 
-  Definition kptLetIn (saveinfo:saveinfo) na e t00 (t0:term) (t1:term) (t2:infolocal -> term) :=
+  Definition kptLetIn (saveinfo:saveinfo) e t00 na (t0:term) (t1:term) (t2:infolocal -> term) :=
     let e' := update_kp_withbody na e saveinfo (t00) in
     tLetIn na t0 t1 (t2 e').
 
 
-  Definition it_kptbind (saveinfo:option string) (ctx:context) (tp:infolocal -> term -> term) (e:infolocal) (t: infolocal -> term) : term :=
+  Definition it_kptbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> term) (ctx:context) (t: infolocal -> term) : term :=
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -477,20 +476,20 @@ Section term_generation.
         | None =>
             Ffix ctx' e (
               fun e =>
-                kptbind saveinfo decl.(decl_name) e
+                kptbind saveinfo e decl.(decl_name)
                   (tp e decl.(decl_type)) t
             )
         | Some t0 =>
             Ffix ctx' e (
               fun e =>
-                kptLetIn NoSave (*todo*) decl.(decl_name) e t0
+                kptLetIn NoSave (*todo*)e t0 decl.(decl_name)
                   (tp e t0) (tp e decl.(decl_type)) t
             )
         end
       end in
     Ffix ctx e t.
 
-  Definition it_mktbind (saveinfo:option string) (ctx:context) (tp:infolocal -> term -> term) (e:infolocal) (t: infolocal -> term) : term :=
+  Definition it_mktbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> term) (ctx:context) (t: infolocal -> term) : term :=
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -518,11 +517,11 @@ Section term_generation.
       end in
     Ffix ctx e e (fun (_:infolocal) => t).
 
-  Definition it_kptbind_default saveinfo ctx e t :=
-    it_kptbind saveinfo ctx mapt e t.
+  Definition it_kptbind_default saveinfo e ctx t :=
+    it_kptbind saveinfo e mapt ctx t.
 
-  Definition it_mktbind_default saveinfo ctx e t :=
-    it_mktbind saveinfo ctx mapt e t.
+  Definition it_mktbind_default saveinfo e ctx t :=
+    it_mktbind saveinfo e mapt ctx t.
 
 End term_generation.
 

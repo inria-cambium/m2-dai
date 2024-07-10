@@ -254,14 +254,14 @@ If \coqe{(tRel i)} refers to the type name of the $k$th inductive body, return \
 
 \item
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition mktProd (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+Definition mktProd (saveinfo:saveinfo) (e:infolocal) (na:aname)
     (t1:term) (t2:infolocal -> term): term
 \end{lstlisting}
 Produce a Prod term, namely \coqe{(forall (na:t1), _)}.
 \begin{itemize}
     \item \coqe{saveinfo}: whether save the information of new variable into \coqe{e}
-    \item \coqe{na}: the aname of the new variable
     \item \coqe{e}: the local information
+    \item \coqe{na}: the aname of the new variable
     \item \coqe{t1}: the type of variable
     \item \coqe{t2}: the body (need to be fed with a local information)
 \end{itemize}
@@ -272,29 +272,29 @@ Produce a Prod term, namely \coqe{(forall (na:t1), _)}.
 
 \item
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition kptProd (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+Definition kptProd (saveinfo:saveinfo) (e:infolocal) (na:aname)
     (t1:term) (t2:infolocal -> term): term
 \end{lstlisting}
 Similar to the former one, but for different usage.
 
 \item
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition it_kptProd (saveinfo:option string) (ctx:context) (e:infolocal) 
+Definition it_kptProd (saveinfo:option string) (e:infolocal) (ctx:context)
     (t: infolocal -> term): term
 \end{lstlisting}
 Iterative version of \coqe{kptProd}.
 When \coqe{ctx} $\approx$ \coqe{[vk; ... v2; v1]}, the result will be like:
-\coqe{(forall (_:v1) (_:v2) ... (_:vk), _)}. (need to transform these types by renaming transformation)
+\coqe{(forall (_:v1) (_:v2) ... (_:vk), _)}. (need to transform these types by renaming transformation i.e. \coqe{mapt})
 \begin{itemize}
     \item \coqe{saveinfo}: whether save the information of the new variables into \coqe{e}
-    \item \coqe{ctx}: the list of the new variables
     \item \coqe{e}: the local information
+    \item \coqe{ctx}: the list of the new variables
     \item \coqe{t}: the body (need to be fed with a local information)
 \end{itemize}
 
 \item
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition it_mktProd (saveinfo:option string) (ctx:context) (e:infolocal) 
+Definition it_mktProd (saveinfo:option string) (e:infolocal) (ctx:context)
     (t: infolocal -> term) :term
 \end{lstlisting}
 iterative version of \coqe{mktProd}.
@@ -312,7 +312,7 @@ Simply speaking, when creating a Prod term,
     \item otherwise, or say when the new variable does not occur in the source, use \coqe{mktProd} 
 \end{itemize}
 
-  
+
 
   For example, for a general inductive type:
 
@@ -331,17 +331,16 @@ When handle the parameters, since the parameters can be referenced in the source
 \item
 Similar functions for \coqe{Lambda} instead of \coqe{Prod} as follow:
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
-Definition mktLambda (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+Definition mktLambda (saveinfo:saveinfo) (e:infolocal) (na:aname)
     (t1:term) (t2:infolocal -> term): term
-Definition kptLambda (saveinfo:saveinfo) (na:aname) (e:infolocal) 
+Definition kptLambda (saveinfo:saveinfo) (e:infolocal) (na:aname)
     (t1:term) (t2:infolocal -> term): term
-Definition it_kptLambda (saveinfo:option string) (ctx:context) (e:infolocal) 
+Definition it_kptLambda (saveinfo:option string) (e:infolocal) (ctx:context)
     (t: infolocal -> term): term
-Definition it_mktLambda (saveinfo:option string) (ctx:context) (e:infolocal) 
+Definition it_mktLambda (saveinfo:option string) (e:infolocal) (ctx:context)
     (t: infolocal -> term): term
 \end{lstlisting}
 
-    
 \end{itemize}
 
 % \item
@@ -375,7 +374,7 @@ Record infolocal : Type := mkinfo {
   info : list (string * information) ;
   info_source : list (string * information);
   kn : kername;
-}.    
+}.
 
 Inductive information : Type :=
   | information_list (l : list (BasicAst.context_decl nat))
@@ -565,7 +564,7 @@ Then it is the time to build the \coqe{Prod} term, the following code produces t
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
 Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
     ...
-    e <- it_kptProd (Some "params") params initial_info;; todo.
+    e <- it_kptProd (Some "params") initial_info params;; todo.
 \end{lstlisting}
 
 \begin{remark}
@@ -575,33 +574,33 @@ The notation \coqe{"<- ;;"} is defined as
 \end{remark}
 
 
-Then, for the part 
+Then, for the part
 \coqe{ forall (P: forall $\overrightarrow{i:Ind}$, T $\vec{p}$ $\vec{i}$ -> Prop), ...}
 
 We introduce the variable "P" first:
 
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
     ...
-    e <- it_kptProd (Some "params") params initial_info;;
-    e <- mktProd (Saveitem "P") prop_name e (todo) (*type of P*);;
+    e <- it_kptProd (Some "params") initial_info params;;
+    e <- mktProd (Saveitem "P") e prop_name (todo) (*type of P*);;
     (todo) (*body of the Prod*)
 \end{lstlisting}
 
 $\Longrightarrow$
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
     ...
-    e <- it_kptProd (Some "params") params initial_info;;
-    e <- mktProd (Saveitem "P") prop_name e 
-        (e <- it_mktProd (Some "indices") indices e;;  todo);;
+    e <- it_kptProd (Some "params") initial_info params;;
+    e <- mktProd (Saveitem "P") e prop_name
+        (e <- it_mktProd (Some "indices") e indices;;  todo);;
     todo (*body of the Prod*)
 \end{lstlisting}
 
 $\Longrightarrow$
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
     ...
-    e <- it_kptProd (Some "params") params initial_info;;
-    e <-  mktProd (Saveitem "P") prop_name e
-        (e <- it_mktProd (Some "indices") indices e;;
+    e <- it_kptProd (Some "params") initial_info params;;
+    e <-  mktProd (Saveitem "P") e prop_name
+        (e <- it_mktProd (Some "indices") e indices;;
          tProd the_name
           (tApp (tInd the_inductive []) (*T*)
               (rels_of "params" e ++ rels_of "indices" e)) (*p i*)
@@ -619,11 +618,11 @@ Now let us produce the part
 which should be at the end of the induction principle.
 \begin{lstlisting}[language = {Coq}, basicstyle = \small]
     ...
-    e <- it_kptProd (Some "params") params initial_info;;
-    e <- mktProd (Saveitem "P") prop_name e (fun e => ... ) (*type of P*) ;;
+    e <- it_kptProd (Some "params") initial_info params;;
+    e <- mktProd (Saveitem "P") e prop_name (fun e => ... ) (*type of P*) ;;
     ...
-     e <- it_mktProd (Some "indices") indices e;;
-     e <- mktProd (Saveitem "x") the_name e
+     e <- it_mktProd (Some "indices") e indices;;
+     e <- mktProd (Saveitem "x") e the_name
       (*type of x: T A1 ... Ak i1 ... im*)
       (tApp (tInd the_inductive [])
           (rels_of "params" e ++ rels_of "indices" e));;
@@ -671,20 +670,20 @@ let auxarg arg (t:infolocal -> term): infolocal -> term :=
     match is_rec_call e i with
     | Some _ =>
       (*save the argument v into information list "args"*)
-      e <- mktProd (Savelist "args") na e
+      e <- mktProd (Savelist "args") e na
         (*type of v: vec A n*)
         (tApp (tInd the_inductive []) (map (mapt e) tl));;
       (* P n v -> t*)
-      kptProd NoSave the_name e
+      kptProd NoSave e the_name
         (tApp
           (rel_of "P" e) (*P*)
-          (let tl := n_tl tl (length params) in 
+          (let tl := n_tl tl (length params) in
             (*do x times List.tl, i.e. remove the params*)
-            (map (mapt e) tl) (*n*) 
+            (map (mapt e) tl) (*n*)
              ++ [geti_info "args" e 0] (*v*))
         ) t
     | None =>
-      kptProd (Savelist "args") na e
+      kptProd (Savelist "args") e na
         (mapt e t1)
         t
     end
