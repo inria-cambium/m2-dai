@@ -37,10 +37,20 @@ Next Obligation.
   lia.
 Qed.
 
-(* Print term. *)
+
+Program Fixpoint it_update_kp {n k nind l} names (e:cinfo n k nind l): (cinfo (#|names| + n ) (#|names| + k) _ _) :=
+  match names with
+  | [ ] => e
+  | na :: names => it_update_kp names (update_kp na e None) end.
+(* Next Obligation. *)
+Program Fixpoint it_update_kp_defs {n k nind l} (defs:list (def term)) (e:cinfo n k nind l): (cinfo (#|defs| + n ) (#|defs| + k) _ _) :=
+  match defs with
+  | [] => e
+  | def :: defs' => it_update_kp_defs defs' (update_kp def.(dname) e None) end.
+(* Next Obligation. *)
 
 Unset Guard Checking.
-(*todo todo todo todo todo*)
+
 Program Fixpoint Ffix_mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:closedn m t)
   {struct t}: cterm n :=
   match t with
@@ -61,14 +71,47 @@ Program Fixpoint Ffix_mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:c
     cLetIn na (Ffix_mapt e t0 _) (Ffix_mapt e t1 _)
       (Ffix_mapt (update_kp na e None) t2 _)
   | tApp tx tl =>
-    cApp (Ffix_mapt  e tx _)
+    cApp (Ffix_mapt e tx _)
       (map_In tl (fun t h' => Ffix_mapt e t _ ))
   | tConst ind instance => cConst ind instance
   | tInd ind instance => cInd ind instance
   | tConstruct ind m instance => cConstruct ind m instance
-  | tCase _ _ _ _ => exist _ t todo
+  | tCase ci p t0 bl =>
+    cCase ci
+      {|cpunist := p.(puinst);
+        cpparms := map_In p.(pparams) (fun t h' => Ffix_mapt e t _);
+        cpcontext := p.(pcontext);
+        cpreturn := Ffix_mapt (it_update_kp p.(pcontext) e) p.(preturn) _;
+      |}
+      (Ffix_mapt e t0 _)
+      (map_In bl
+        (fun b h' =>
+          {|
+            cbcontext := b.(bcontext);
+            cbbody := Ffix_mapt (it_update_kp b.(bcontext) e) b.(bbody) _
+          |}
+        ))
   | tProj pj t => cProj pj (Ffix_mapt e t _)
-  | tFix _ _ | tCoFix _ _ => exist _ t todo
+  | tFix mfix k =>
+      let e' := (it_update_kp_defs mfix e) in
+      cFix (
+        existc (map_In mfix (fun def h' => {|
+                  cdname := def.(dname);
+                  cdtype := Ffix_mapt e def.(dtype) _;
+                  cdbody := Ffix_mapt e' def.(dbody) _;
+                  crarg := def.(rarg)
+                |}))
+      ) k
+  | tCoFix mfix k =>
+      let e' := (it_update_kp_defs mfix e) in
+      cCoFix (
+        existc (map_In mfix (fun def h' => {|
+                  cdname := def.(dname);
+                  cdtype := Ffix_mapt e def.(dtype) _;
+                  cdbody := Ffix_mapt e' def.(dbody) _;
+                  crarg := def.(rarg)
+                |}))
+      ) k
   | tInt i => cInt i
   | tFloat f => cFloat f
   | tArray l arr t1 t2 =>
@@ -90,6 +133,57 @@ Next Obligation. apply andb_andI in h. destruct h. auto. Qed.
 Next Obligation.
   apply andb_andI in h. destruct h.
   eapply forallb_Forall in H0. eapply Forall_forall in H0. 2:exact h'. auto.
+Qed.
+Next Obligation.
+  apply andb_andI in h. destruct h.
+  apply andb_andI in H. destruct H.
+  unfold test_predicate in H. simpl in H. apply andb_andI in H. destruct H.
+  apply forallb_Forall in H.
+  eapply (Forall_forall) in H.
+  2:exact h'. auto.
+Qed.
+Next Obligation.
+  apply andb_andI in h. destruct h.
+  apply andb_andI in H. destruct H.
+  unfold test_predicate in H. simpl in H. apply andb_andI in H. destruct H. auto.
+Qed.
+Next Obligation.
+  apply andb_andI in h. destruct h.
+  apply andb_andI in H. destruct H. auto.
+Qed.
+Next Obligation.
+  apply andb_andI in h. destruct h. clear H.
+  apply forallb_Forall in H0.
+  assert (test_branch (closedn
+            (#|bcontext b| + m)) b).
+  eapply Forall_forall in H0. 2:exact h'. auto.
+  unfold test_branch in H. auto.
+Qed.
+Next Obligation.
+  apply forallb_Forall in h.
+  eapply Forall_forall in h. 2:exact h'.
+  unfold test_def in h. apply andb_andI in h. destruct h. auto.
+Qed.
+Next Obligation.
+  apply forallb_Forall in h.
+  eapply Forall_forall in h. 2:exact h'.
+  unfold test_def in h. apply andb_andI in h. destruct h. auto.
+Qed.
+Next Obligation.
+  rewrite <- map_In_length. auto.
+Qed.
+Next Obligation.
+  apply forallb_Forall in h.
+  eapply Forall_forall in h. 2:exact h'.
+  unfold test_def in h. apply andb_andI in h. destruct h. auto.
+Qed.
+Next Obligation.
+  apply forallb_Forall in h.
+  eapply Forall_forall in h. 2:exact h'.
+  unfold test_def in h. apply andb_andI in h. destruct h. auto.
+Qed.
+Next Obligation.
+  rewrite <- map_In_length. auto.
 Qed.
 Next Obligation.
   apply andb_andI in h. destruct h. apply andb_andI in H. destruct H.

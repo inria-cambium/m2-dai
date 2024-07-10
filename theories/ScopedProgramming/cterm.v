@@ -2,6 +2,7 @@ Require Export MetaCoq.MetaCoqPrelude.
 Export MCMonadNotation.
 Export List.
 Export ListNotations.
+Import Lia.
 
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 Notation "'existc' x" := (exist _ x _) (at level 100).
@@ -86,14 +87,112 @@ Program Definition cInd {n:nat} inductive instance : cterm n := existc (tInd ind
 
 Program Definition cConstruct {n:nat} inductive m instance : cterm n := existc (tConstruct inductive m instance).
 
-(* Program Definition cCase {n:nat} (ci:case_info) (p: c brs *)
+Record cpredicate (n:nat):Type := {
+  cpunist: Instance.t;
+  cpparms: list (cterm n);
+  cpcontext : list aname;
+  cpreturn : cterm (#|cpcontext| + n);
+}.
+
+Record cbranch (n:nat) : Type :={
+  cbcontext : list aname;
+  cbbody : cterm (#|cbcontext| + n)
+}.
+
+Program Definition cCase {n} (ci:case_info) (p:cpredicate n)
+  (t:cterm n) (bl:list (cbranch n)) : cterm n :=
+  existc (
+    tCase ci
+      (mk_predicate (cpunist _ p) (map (fun t => proj1_sig t) (cpparms _ p)) (cpcontext _ p) (proj1_sig (cpreturn _ p)))
+      (proj1_sig t)
+      (map (fun b => mk_branch (cbcontext _ b) (proj1_sig (cbbody _ b))) bl)
+  ).
+Next Obligation.
+  apply andb_is_true. split. apply andb_is_true. split.
+  - unfold test_predicate.
+    simpl. destruct p. simpl.
+    apply andb_is_true.
+    split.
+    + apply forallb_Forall.
+      eapply Forall_map. simpl.
+      apply Forall_forall.
+      intro x. destruct x. simpl. auto.
+    + destruct cpreturn0. simpl.
+      (* assert ( n + #|cpcontext0| = #|cpcontext0| + n ). lia. *)
+      auto.
+  - destruct t. auto.
+  - unfold test_branches_k.
+    induction bl.
+    + simpl. auto.
+    + simpl. apply andb_is_true.
+      split.
+      ++ unfold test_branch.
+         destruct a. simpl. destruct cbbody0. simpl. auto.
+      ++ auto.
+Qed.
+(* Next Obligation. *)
 
 Program Definition cProj {n} projection (t:cterm n) : cterm n := existc (tProj projection (proj1_sig t)).
 Next Obligation. destruct t. auto. Qed.
 
-(* Program Definition cFix {n} *)
+Record cdef (n m:nat) : Type :={
+  cdname : aname;
+  cdtype : cterm n;
+  cdbody : cterm (m + n);
+  crarg : nat
+}.
 
-(* Program Definition cCoFix {n}  *)
+Definition cmfix (n m:nat):Type :=
+  { l:list (cdef n m) | #|l| = m}.
+
+Program Definition cFix {n m} (mfix:cmfix n m) (k:nat) :cterm n :=
+  existc
+    (tFix
+      (map (fun cdef =>
+            mkdef term
+              (cdname _ _ cdef)
+              (proj1_sig (cdtype _ _ cdef))
+              (proj1_sig (cdbody _ _ cdef))
+              (crarg _ _ cdef)
+              )  (proj1_sig mfix))
+      k).
+Next Obligation.
+  rewrite map_length.
+  apply forallb_Forall.
+  apply Forall_map.
+  apply Forall_forall.
+  intros.
+  unfold test_def.
+  apply andb_is_true. split.
+  - destruct x. simpl. destruct cdtype0. simpl. auto.
+  - destruct x. simpl. destruct cdbody0. simpl.
+    destruct mfix. simpl. rewrite e. auto.
+Qed.
+
+Program Definition cCoFix {n m} (mfix:cmfix n m) (k:nat) :cterm n :=
+  existc
+    (tCoFix
+      (map (fun cdef =>
+            mkdef term
+              (cdname _ _ cdef)
+              (proj1_sig (cdtype _ _ cdef))
+              (proj1_sig (cdbody _ _ cdef))
+              (crarg _ _ cdef)
+              )  (proj1_sig mfix))
+      k).
+Next Obligation.
+  rewrite map_length.
+  apply forallb_Forall.
+  apply Forall_map.
+  apply Forall_forall.
+  intros.
+  unfold test_def.
+  apply andb_is_true. split.
+  - destruct x. simpl. destruct cdtype0. simpl. auto.
+  - destruct x. simpl. destruct cdbody0. simpl.
+    destruct mfix. simpl. rewrite e. auto.
+Qed.
+(* Next Obligation. *)
 
 Program Definition cInt {n} i : cterm n := existc (tInt i).
 
@@ -110,4 +209,3 @@ Next Obligation.
     + auto. + destruct H. ++ destruct a. simpl in H. rewrite <- H. auto. ++ auto.
   - auto.
 Qed.
-
