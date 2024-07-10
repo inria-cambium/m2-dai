@@ -23,10 +23,10 @@ Section index_manage.
   Fixpoint replace_add_info (info:list (string * list (BasicAst.context_decl nat))) (na:string)
     (item : BasicAst.context_decl nat) :=
     match info with
+    | [] => (na, [item]) :: []
     | (s, l0) :: info' =>
         if String.eqb s na then (s, (item::l0)) :: info'
         else (s, l0) :: (replace_add_info info' na item)
-    | [] => (na, [item]) :: []
     end.
 
   Lemma plus_one_index_length {l} : #|plus_one_index l| = #|l|.
@@ -241,18 +241,18 @@ Arguments ei {n k nind l}.
   | Saveitem (s:string)
   | NoSave. *)
 
-Fixpoint replace_S (l:list (string * nat)) str :=
+Fixpoint replace_add_l (l:list (string * nat)) str :=
   match l with
   | [] => [(str, 1)]
   | (name, n) :: l' =>
     if String.eqb name str then (name, S n) :: l'
-    else (name, n) :: (replace_S l' str)
+    else (name, n) :: (replace_add_l l' str)
   end.
 
 Definition replace_info_len saveinfo (l:list (string * nat)) :=
   match saveinfo with
   | None => l
-  | Some str => replace_S l str
+  | Some str => replace_add_l l str
   end.
 
 
@@ -290,7 +290,7 @@ Lemma lemx01 {info l s na} :
     (replace_add_info
       (map
           (fun x => (x.1, plus_one_index x.2)) info) s
-      (mkdecl na None 0)) (replace_S l s).
+      (mkdecl na None 0)) (replace_add_l l s).
 Proof.
   intro.
   induction H.
@@ -463,21 +463,25 @@ Obligation 1.
 Qed.
 
 
-Definition mfind (l:list (string * nat)) str : nat :=
+Definition within_info l (str:string) (i:nat) :=
   match (find (fun x => String.eqb str x.1) l) with
-  | Some (_, n) => n
-  | None => 0 end.
+  | Some (_, n) => i < n
+  | None => i < 0 end.
 
-Definition within_info {n k nind l} (e:cinfo n k nind l) (str:string) (i:nat) :=
-  i < mfind l str.
 
+Definition has_info (l:list (string*nat)) str i :=
+  match
+    (find (fun x => String.eqb str x.1) l) with
+  | Some (_, k) => i <= k
+  | None => False
+  end.
 
 Lemma lem8989 {n k nind l} (e:cinfo n k nind l) (str:string) (i:nat):
-  within_info e str i -> i < #|lookup_list (ei e) str|.
+  within_info l str i -> i < #|lookup_list (ei e) str|.
 Proof.
   intro.
   destruct e. simpl. unfold within_info in H.
-  unfold lookup_list. unfold mfind in H. destruct ei0. simpl.
+  unfold lookup_list. destruct ei0. simpl.
   simpl in Pl0. simpl in H.
   clear ck0. clear ci0.
   induction Pl0.
@@ -492,7 +496,7 @@ Qed.
 
 
 Program Definition geti_info {n k nind l} (na:string) (e:cinfo n k nind l) (i:nat)
-  (h:within_info e na i) :cterm n :=
+  (h:within_info l na i) :cterm n :=
   let l := (lookup_list (ei e) na) in
   match nth_error l i with
   | Some x => existc (tRel (decl_type x))
@@ -532,7 +536,7 @@ Next Obligation.
 Qed.
 
 Program Definition rel_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l)
-  (h:within_info e na 0) : cterm n :=
+  (h:within_info l na 0) : cterm n :=
   geti_info na e 0 h.
 
 Lemma lem_lookup_list {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
@@ -571,5 +575,81 @@ Program Definition rels_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l): 
 Next Obligation.
   pose (h0 := lem_lookup_list e na).
   rewrite Forall_forall in h0.
-  pose (h1 := h0 x xinl). auto.
+  pose proof (h0 x xinl). auto.
+Qed.
+
+Lemma lem_within_replace {l str}:
+  within_info (replace_add_l l str) str 0.
+Proof.
+  induction l.
+  + unfold within_info.
+    unfold replace_add_l. simpl.
+    assert (String.eqb str str = true). apply lemstr. auto.
+    rewrite H. lia.
+  + simpl. destruct a. simpl.
+    destruct (String.eqb t str) eqn:e.
+    ++ apply lemstr in e. rewrite e. simpl. auto.
+       assert (String.eqb str str = true). apply lemstr. auto.
+       unfold within_info. simpl. rewrite H. lia.
+    ++ simpl.
+       destruct (String.eqb str t) eqn:e1.
+       -- apply lemstr in e1. rewrite e1 in e. assert (String.eqb t t = true). apply lemstr. auto.
+          rewrite H in e. inversion e.
+       -- simpl. unfold within_info. simpl. rewrite e1. auto.
+Qed.
+
+Lemma lem001 {s1 s2} l : String.eqb s1 s2 = false ->
+      find
+        (fun x : string × nat =>
+         String.eqb s1 x.1) l
+      =
+      find
+        (fun x : string × nat =>
+        String.eqb s1 x.1)
+        (replace_add_l l s2).
+Proof.
+  intros.
+  induction l.
+  + simpl. rewrite H. auto.
+  + simpl. destruct a. simpl.
+    destruct (String.eqb s1 t) eqn:eq1.
+    - destruct (String.eqb t s2) eqn:eq2.
+      ++ apply lemstr in eq1. rewrite <- eq1 in eq2. rewrite H in eq2. inversion eq2.
+      ++ simpl. rewrite eq1. auto.
+    - destruct (String.eqb t s2) eqn:eq2.
+      ++ simpl. rewrite eq1. auto.
+      ++ simpl. rewrite eq1. auto.
+Qed.
+
+Lemma lem_has_info_within0 {l nind str j}: j < nind -> has_info l str nind -> within_info l str j.
+Proof.
+  unfold within_info, has_info.
+  intros.
+  destruct (find (fun x => String.eqb str x.1) l).
+  + destruct p. lia.
+  + auto.
+Qed.
+
+Lemma lem_has_info_within1 {nind l str1 str2 kk }:
+  kk < nind -> String.eqb str1 str2 = false
+  -> has_info l str1 nind
+  -> within_info (replace_add_l l str2) str1 kk.
+Proof.
+  intros.
+  unfold has_info in H1.
+  unfold within_info.
+  pose proof (lem001 l H0).
+  destruct (find
+              (fun x : string × nat =>
+              String.eqb str1 x.1) l) eqn:eq0.
+  + rewrite <- H2. destruct p. lia.
+  + auto.
+Qed.
+
+Lemma lem_app_closed {t tl n} : closedn n (tApp t tl) -> forall t', In t' tl -> closedn n t'.
+Proof.
+  intros.
+  simpl in H. apply andb_andI in H. destruct H.
+  apply forallb_Forall in H1.
+  eapply Forall_forall in H1. 2:exact H0. auto.
 Qed.

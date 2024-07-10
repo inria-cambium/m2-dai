@@ -28,58 +28,11 @@ induction n.
   exact (IHn H0).
 Qed.
 
-Definition has_info (l:list (string*nat)) str i :=
-  match
-    (find (fun x => String.eqb str x.1) l) with
-  | Some (_, k) => i <= k
-  | None => False
-  end.
-
-Lemma lem_arg0 {l str}: mfind (replace_S l str) str > 0.
-Proof.
-  induction l.
-  + unfold mfind. unfold replace_S. simpl.
-    assert (String.eqb str str = true). apply lemstr. auto.
-    rewrite H. lia.
-  + simpl. destruct a. simpl.
-    destruct (String.eqb t str) eqn:e.
-    ++ apply lemstr in e. rewrite e. unfold mfind. simpl. auto.
-       assert (String.eqb str str = true). apply lemstr. auto. rewrite H. lia.
-    ++ unfold mfind. simpl.
-       destruct (String.eqb str t) eqn:e1.
-       -- apply lemstr in e1. rewrite e1 in e. assert (String.eqb t t = true). apply lemstr. auto.
-          rewrite H in e. inversion e.
-       -- simpl. auto.
-Qed.
-
-Lemma lem_arg1 {s1 s2} l : String.eqb s1 s2 = false ->
-      find
-        (fun x : string × nat =>
-         String.eqb s1 x.1) l
-      =
-      find
-        (fun x : string × nat =>
-        String.eqb s1 x.1)
-        (replace_S l s2).
-Proof.
-  intros.
-  induction l.
-  + simpl. rewrite H. auto.
-  + simpl. destruct a. simpl.
-    destruct (String.eqb s1 t) eqn:eq1.
-    - destruct (String.eqb t s2) eqn:eq2.
-      ++ apply lemstr in eq1. rewrite <- eq1 in eq2. rewrite H in eq2. inversion eq2.
-      ++ simpl. rewrite eq1. auto.
-    - destruct (String.eqb t s2) eqn:eq2.
-      ++ simpl. rewrite eq1. auto.
-      ++ simpl. rewrite eq1. auto.
-Qed.
-
 
 Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
   kn ind_npars' (h:has_info l "P" nind)
- (ta:forall {k}, cinfo k (S m) nind (replace_S l "args") -> cterm k)
-: cinfo n m nind l -> cterm n :=
+ (ta:forall {k}, cinfo k (S m) nind (replace_add_l l "args") -> cterm k)
+  : cinfo n m nind l -> cterm n :=
   let t1 := proj1_sig arg.(decl_type) in
   let na := arg.(decl_name) in
   fun e  =>
@@ -136,49 +89,33 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
   end) eq_refl.
 
 Next Obligation.
-  unfold has_info in h. unfold within_info. unfold mfind.
-  assert (String.eqb "P" "args" = false). auto.
-  pose proof (lem_arg1 l H0).
-
-  destruct (find
-              (fun x : string × nat =>
-              String.eqb "P" x.1) l) eqn:eq0.
-  + rewrite <- H1. destruct p. lia.
-  + inversion h.
+  eapply lem_has_info_within1. exact H. all:auto.
 Qed.
-Next Obligation. destruct e. unfold within_info. eapply lem_arg0. Qed.
+Next Obligation. eapply lem_within_replace. Qed.
 Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto).
 Next Obligation. destruct arg. destruct decl_type. simpl. simpl in eq.
-  rewrite eq in i0. simpl in i0.
-  apply andb_andI in i0. destruct i0. apply forallb_Forall in H1.
-  eapply Forall_forall in H1. 2: exact h'. auto. Qed.
+  rewrite eq in i0. eapply lem_app_closed. exact i0. auto.
+Qed.
 Next Obligation.
-  unfold has_info in h. unfold within_info. unfold mfind.
-  assert (String.eqb "P" "args" = false). auto.
-  pose proof (lem_arg1 l H0).
-  destruct (find
-              (fun x : string × nat =>
-              String.eqb "P" x.1) l) eqn:eq0.
-  + rewrite <- H1. destruct p. lia.
-  + inversion h.
+  eapply lem_has_info_within1. exact H. all:auto.
 Qed.
 Next Obligation.
   destruct arg. destruct decl_type. simpl. simpl in eq.
-  rewrite eq in i0. simpl in i0.
-  apply andb_andI in i0. destruct i0. apply forallb_Forall in H1.
-  eapply Forall_forall in H1. 2: eapply lem_ntl1. 2:exact h'. auto. Qed.
-Next Obligation.    destruct e. unfold within_info. eapply lem_arg0. Qed.
+  rewrite eq in i0. eapply lem_app_closed. exact i0. eapply lem_ntl1. exact h'.
+Qed.
+Next Obligation. eapply lem_within_replace. Qed.
 Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto).
+(* Next Obligation. *)
 
 
 Program Fixpoint transformer_args {n k nind m} {l}
-        (args:context_closed k m) kn ind_npars' (h:has_info (add_info_len' l "args" m) "P" nind)
-        (t0:forall p, cinfo p (k + m) nind (add_info_len' l "args" m) -> cterm p)
-          : cinfo n k nind (add_info_len' l "args" 0) -> cterm n :=
+        (args:context_closed k m) kn ind_npars' (h:has_info (addl' l "args" m) "P" nind)
+        (t0:forall p, cinfo p (k + m) nind (addl' l "args" m) -> cterm p)
+          : cinfo n k nind (addl' l "args" 0) -> cterm n :=
         (match args as args0
           in context_closed _ m2
           return forall (a:m=m2), (cast args m2 a = args0)
-                -> cinfo n k nind (add_info_len' l "args" 0) -> cterm n with
+                -> cinfo n k nind (addl' l "args" 0) -> cterm n with
           | nnil => fun eq1 eq2 => fun e' => t0 _ (mkcinfo (ei e') _ _ _)
           | ncons _ a args' =>
             fun eq1 eq2 =>
@@ -189,12 +126,11 @@ Program Fixpoint transformer_args {n k nind m} {l}
 Next Obligation. destruct e'. simpl. auto. Qed.
 Next Obligation. destruct e'. simpl. lia. Qed.
 Next Obligation. destruct e'. simpl. auto. Qed.
-(* Next Obligation.  *)
-
 Next Obligation. destruct e''. simpl. auto. Qed.
 Next Obligation. destruct e''. simpl. lia. Qed.
-Next Obligation. destruct e''. simpl. unfold add_info_len'. auto. Qed.
+Next Obligation. destruct e''. simpl. auto. Qed.
 (* Next Obligation. *)
+
 
 Program Definition transformer_result {n k nind l} j
   constructor_current indices
@@ -207,31 +143,18 @@ Program Definition transformer_result {n k nind l} j
       [cApp constructor_current
         (rels_of "params" e ++ rels_of "args" e)]
     ).
-Next Obligation.
-  unfold within_info. unfold mfind.
-  unfold has_info in h.
-  destruct (find (fun x : string × nat => String.eqb "P" x.1) l) eqn:eq0.
-  + destruct p. lia.
-  + inversion h.
-Qed.
+Next Obligation. eapply lem_has_info_within0. exact hj. auto. Qed.
 (* Next Obligation. *)
 
 
 
-Program Definition auxctr {n m nind l} (e:cinfo n m nind (add_info_len' l "args" 0))
+Program Definition auxctr {n m nind l} (e:cinfo n m nind (addl' l "args" 0))
   (ctr:constructor_body_closed m) (j i:nat) kn (ind_npars':nat) (hj:j<nind)
-  (h:has_info (add_info_len' l "args" m) "P" nind)
+  (h:has_info (addl' l "args" m) "P" nind)
   : cterm n :=
   let the_inductive := {|inductive_mind := kn; inductive_ind := nind - j - 1|} in
   let constructor_current : term := tConstruct the_inductive i [] in
-  (* let cstr_type := proj1_sig (cstr_type' _ ctr) in
-  let return_type :=
-    (fix Ffix t :=
-      match t with
-      | tProd _ _ t => Ffix t
-      | _ => t
-      end ) cstr_type
-  in *)
+
   @transformer_args _ _ _ _ l (cstr_args' _ ctr) kn ind_npars' _
     (fun m =>
       transformer_result
@@ -259,12 +182,10 @@ Program Fixpoint Ffix_aux {n m nind l} (e:cinfo n m nind l) (b:list (constructor
           )
           (S i) kn ind_npars' _ _)
   end) eq_refl.
-
 Next Obligation. lia. Qed.
 Next Obligation. destruct e. simpl. assert (n = n + 0). lia. rewrite <- H. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
-
 Next Obligation. lia. Qed.
 Next Obligation. destruct e''. simpl. assert (S (n + #|b'|) = n + S #|b'|). lia. rewrite <- H. auto. Qed.
 Next Obligation. destruct e''. simpl. auto. Qed.
@@ -279,10 +200,10 @@ Program Definition aux' {n m nind l} (e:cinfo n m nind l) (b:list (constructor_b
 
 
 Program Fixpoint auxnew {n k nind l} i lb kn
-  (a0 : cinfo (n + #|lb|) k nind (add_info_len' l "P" #|lb|) -> cterm (n + #|lb|)) :
-  cinfo n k nind (add_info_len' l "P" 0) -> cterm n :=
+  (a0 : cinfo (n + #|lb|) k nind (addl' l "P" #|lb|) -> cterm (n + #|lb|)) :
+  cinfo n k nind (addl' l "P" 0) -> cterm n :=
 
- (match lb as lb' return lb = lb' -> cinfo n k nind (add_info_len' l "P" 0) -> cterm n with
+ (match lb as lb' return lb = lb' -> cinfo n k nind (addl' l "P" 0) -> cterm n with
  | [] => fun eq => fun e' =>
     cterm_lift _ $ (a0 (mkcinfo (ei e') _ _ _ ))
  | body :: lb' => fun eq =>
@@ -329,7 +250,8 @@ Program Definition GenerateIndp_mutual (kername : kername)
     aux' e b j t kername ty.(ind_npars') h hj
   in
 
-  let fix fold_right_i_aux {n m nind l} bl i h (hi:i + #|bl| <= nind)
+  let fix fold_right_i_aux {n m nind l} bl i h
+    (hi:i + #|bl| <= nind)
     (t: cinfo (n + sum' bl) m nind l -> cterm (n + sum' bl)):
     cinfo n m nind l -> cterm n
     :=
@@ -385,10 +307,10 @@ Next Obligation.
 Qed.
 Next Obligation. rewrite rev_length. destruct h. lia. Qed.
 Next Obligation.
-  unfold within_info. unfold mfind. simpl. rewrite rev_length. lia.
+  unfold within_info. simpl. rewrite rev_length. lia.
 Qed.
-Next Obligation. unfold within_info. unfold mfind. simpl. lia. Qed.
-
+Next Obligation. unfold within_info. simpl. lia. Qed.
+(* Next Obligation. *)
 
 Definition kn_myProjT2 :=
   (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], "my_projT2").

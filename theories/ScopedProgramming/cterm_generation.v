@@ -109,7 +109,7 @@ Definition mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:=
   Ffix_mapt e (proj1_sig t) (proj2_sig t).
 
 
-Definition add_info_len (l:list (string*nat)) si i :=
+Definition addl (l:list (string*nat)) si i :=
   match si with
   | None => l
   | Some str => (str, i) :: l end.
@@ -130,7 +130,7 @@ Definition add_emp_info e saveinfo :=
 
 Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
   (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: forall (e:cinfo (n + m) (k+m) nind (add_info_len l saveinfo m)),
+  (t: forall (e:cinfo (n + m) (k+m) nind (addl l saveinfo m)),
     cterm (n + m) ) {struct ctx}
   : cterm n :=
   (
@@ -156,7 +156,7 @@ Next Obligation. destruct e. simpl. assert (n = n + 0). lia. rewrite <- H.
 Qed.
 Next Obligation. destruct e. simpl.
   destruct saveinfo. all:simpl. all:lia. Qed.
-Next Obligation. destruct e. simpl. unfold add_info_len.
+Next Obligation. destruct e. simpl. unfold addl.
   destruct saveinfo.
   - simpl. constructor. auto. auto.
   - auto.
@@ -175,7 +175,7 @@ Qed.
 
 Program Definition it_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
   (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: forall (e:cinfo (n + m) (k + m) nind (add_info_len l saveinfo m)) ,
+  (t: forall (e:cinfo (n + m) (k + m) nind (addl l saveinfo m)) ,
     cterm (n + m))
   : cterm n :=
 
@@ -336,7 +336,7 @@ Proof.
 Qed.
 
 
-Definition add_info_len' l (s:string) (n:nat) :=
+Definition addl' l (s:string) (n:nat) :=
   (s, n) :: l.
 
 Lemma mylem999 {info l na saveinfo n0} :
@@ -350,7 +350,7 @@ Forall2
  =>
  x.1 = y.1 /\
  #|x.2| = y.2) info
-(add_info_len' l
+(addl' l
    saveinfo n0)
 ->
 Forall2
@@ -372,7 +372,7 @@ Forall2
           plus_one_index x.2))
         info) saveinfo
      (mkdecl na None 0))
-  (add_info_len' l saveinfo
+  (addl' l saveinfo
      (S n0))
 .
 Proof.
@@ -390,10 +390,10 @@ Qed.
 
 Program Fixpoint Ffix_mkcProd' {n k nind m:nat} {l} (saveinfo:string)
   (ctx:context_closed k m)
-  (e:cinfo n k nind (add_info_len' l saveinfo 0))
-  (e0:cinfo n k nind (add_info_len' l saveinfo 0))
-  (t: cinfo (n + m) (k + m) nind (add_info_len' l saveinfo m) ->
-      cinfo (n + m) k nind (add_info_len' l saveinfo m) -> cterm (n + m))
+  (e:cinfo n k nind (addl' l saveinfo 0))
+  (e0:cinfo n k nind (addl' l saveinfo 0))
+  (t: cinfo (n + m) (k + m) nind (addl' l saveinfo m) ->
+      cinfo (n + m) k nind (addl' l saveinfo m) -> cterm (n + m))
   {struct ctx}: cterm n :=
   (match ctx as ctx0 in context_closed _ m2
     return forall (a:m=m2), (cast ctx m2 a = ctx0) -> cterm n with
@@ -446,7 +446,7 @@ Next Obligation.
 Qed.
 
 Program Definition add_emp_info' {n k nind l} (infon:cinfo n k nind l) s
-  : cinfo n k nind (add_info_len' l s 0) :=
+  : cinfo n k nind (addl' l s 0) :=
   let e := ei infon in
   mkcinfo
     (mkinfo e.(renaming) ((s, []) :: e.(info)) e.(info_source) e.(kn))
@@ -467,7 +467,7 @@ Qed.
 
 Program Definition it_mkcProd {n k nind m:nat} {l} (saveinfo:string)
   (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: cinfo (n + m) (k + m) nind (add_info_len' l saveinfo m)-> cterm (n + m)) : cterm n:=
+  (t: cinfo (n + m) (k + m) nind (addl' l saveinfo m)-> cterm (n + m)) : cterm n:=
   Ffix_mkcProd' saveinfo ctx
     (add_emp_info' e saveinfo)
     (add_emp_info' e saveinfo) (fun a _ => t a).
