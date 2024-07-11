@@ -147,7 +147,7 @@ Definition make_initial_info (kn:kername) (ty:mutual_inductive_body) :infolocal 
             []))
       types)
     []
-    [("rels_of_T", information_list (mapi (fun i x => mkdeclnat x None i) types))] 
+    [("rels_of_T", information_list (mapi (fun i x => mkdeclnat x None i) types))]
     kn.
 
 (*The indicator which shows if some new information should be saved
@@ -349,12 +349,17 @@ Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
 (*return the tRel term of the [i]th element of the information list named [na] inside [e.(info)] *)
 Definition geti_info (na:string) (e:infolocal) (i:nat) :=
   let l := lookup_list e.(info) na in
-  tRel (nth i l todo).(decl_type).
+  tRel (nth i (rev_map decl_type l) todo).
+
+
+Definition get_info_last (na:string) (e:infolocal) :term :=
+  let l := lookup_list e.(info) na in
+  tRel (hd todo l).(decl_type).
 
 (*return the reversal tRel term list of the information list named [na] of [e]*)
 Definition rels_of (na:string) (e:infolocal) :=
   let l := lookup_list e.(info) na in
-  (**)rev(**) (map (fun x => tRel x.(decl_type)) l).
+  rev_map (fun x => tRel x.(decl_type)) l.
 
 (*return the tRel term of the informationitem named [na] of [e]*)
 Definition rel_of (na:string) (e:infolocal) :=
@@ -374,8 +379,9 @@ Definition rel_of (na:string) (e:infolocal) :=
 
     when we use the function below to check this `nforest`, it should return `Some 0`.
 *)
+
 Definition is_rec_call (e:infolocal) i : option nat:=
-  let l := map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
+  let l := rev_map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
   let fix Ffix l j :=
     match l with
     | k :: l0 => if eqb k i then Some j else Ffix l0 (j+1)

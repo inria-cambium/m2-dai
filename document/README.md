@@ -16,11 +16,18 @@ Record infolocal : Type := mkinfo {
 Definition geti_info (na:string) (e:infolocal) (i:nat): term
 
 (*
-  get the tRel term of the ith element of the information list named [na] inside [e.(info)]
+  get the tRel term of the ith element of the information list named [na] inside [e.(info)].
+
 
   i.e.
     if (information_list na l) is in e.(info),
-    then the result is (tRel (nth i l todo)).
+    then the result is:  tRel (nth i (rev_map decl_type l) todo)
+
+  remark:
+    the "rev" may be strange here, but is reasonable
+    but since all elements of l is added by the user, the element added at last
+    in the list is in fact at the head of the list (it works in this way),
+    So here (geti_info na e i) in fact gets the ith element we added into the l.
 *)
 ```
 
@@ -32,7 +39,7 @@ Definition rels_of (na:string) (e:infolocal) :list term
 
   i.e.
     if (information_list na l) is in e.(info),
-    then the result is ( rev  (map (fun decl => tRel decl.(decl_type)) l) )
+    then the result is: rev_map (fun decl => tRel decl.(decl_type)) l
 *)
 ```
 
