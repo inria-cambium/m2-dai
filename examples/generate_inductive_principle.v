@@ -29,127 +29,114 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
 
   (*for each constructor cstr in [b], generate a term (ti)*)
   (*returns t1 -> t2 -> ... tk -> [t e_updated]*)
-  let aux (e:infolocal) (b:list constructor_body) (t:infolocal -> term) :term :=
-    let fix Ffix e b (t:infolocal -> term) i :=
+  let aux (b:list constructor_body) (e:infolocal) (t:infolocal -> term) : term :=
 
-      (* for each type constructor *)
-      (* take Vector.t, 'cons : A -> forall n:nat, vec A n -> vec A (S n)' for example *)
-      (* ~~~~> forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons a n v) *)
-      let auxctr (e:infolocal) (ctr:constructor_body) i : term :=
-        let constructor_current := tConstruct the_inductive i [] in
-        let cstr_type := ctr.(cstr_type) in
+    (* for each type constructor *)
+    (* take Vector.t, 'cons : A -> forall n:nat, vec A n -> vec A (S n)' for example *)
+    (* ~~~~> forall (a:A) (n:nat) (v:vec A n), P n v -> P (S n) (cons a n v) *)
+    let auxctr (i:nat) (ctr:constructor_body) : infolocal -> term :=
+      let constructor_current := tConstruct the_inductive i [] in
+      let cstr_type := ctr.(cstr_type) in
 
-        (*transforme the return type of constructor*)
-        (*'cons : ... -> vec A (S n)'   ~~~>   P (S n) (cons A a n v)
-                          ^^^^^^^^^^                                *)
-        let transformer_result :infolocal -> term := fun e =>
-          tApp (rel_of "P" e)
-            (
-              (map (mapt e) ctr.(cstr_indices))
-              ++
-              [tApp constructor_current
-                (rels_of "params" e ++ rels_of "args" e)]
-            )
-        in
-        (*transforme the argument*)
-          (*A ~~~> forall (a:A) -> [t] *)
-          (*forall (n:nat) ~~~> forall (n:nat) -> [t]*)
-          (*vec A n ~~~> forall (v:vec A n) -> P n v -> [t] *)
-        let auxarg arg (t:infolocal -> term) :infolocal -> term :=
-          let t1 := arg.(decl_type) in
-          let na := arg.(decl_name) in
-          fun e =>
-          match t1 with
-          | tRel i =>
-            match is_rec_call e i with
-            | Some _ =>
-              e <- mktProd (Savelist "args") e na (tInd the_inductive []);;
-              kptProd NoSave e the_name
-                (tApp (rel_of "P" e) [get_info_last "args" e (*tRel 0*)])
-                t
-            (*ex. forall (n:nat)/  A*)
-            | None =>
-              (*save the argument n into information list "args"*)
-              kptProd (Savelist "args") e na
-                (mapt e t1)
-                t
-            end
-          (*ex. vec A n*)
-          | tApp (tRel i) tl =>
-            match is_rec_call e i with
-            | Some _ =>
-              (*save the argument v into information list "args"*)
-              e <-
-                mktProd (Savelist "args") e na
-                  (*type of v: vec A n*)
-                  (tApp (tInd the_inductive []) (map (mapt e) tl));;
-
-              (* P n v -> [t]*)
-              kptProd NoSave e the_name
-                (tApp
-                  (rel_of "P" e)
-                  (let tl := n_tl tl (length params) in
-                    (map (mapt e) tl) (*n*) ++ [get_info_last "args" e (*tRel 0*)] (*v*))
-                ) t
-            | None =>
-              kptProd (Savelist "args") e na
-                (mapt e t1)
-                t
-            end
-          (**********************)
-          | tProd na _ _ =>
-            match check_return_type t1 e with
-            | None => kptProd (Savelist "args") e na (mapt e t1) t
-            | Some _ =>
-              let fix aux_nested e t1 :=
-                match t1 with
-                | tProd na ta tb =>
-                  kptProd (Savelist "arglambda") e na
-                    (mapt e ta) (fun e => aux_nested e tb)
-                | tRel _ =>
-                  match is_rec_call e i with
-                  | None => todo
-                  | Some kk =>
-                    tApp (rel_of "P" e)
-                      [tApp (get_info_last "args" e) (rels_of "arglambda" e)]
-                  end
-                | tApp (tRel _) tl =>
-                  match is_rec_call e i with
-                  | None => todo
-                  | Some kk =>
-                    tApp (rel_of "P" e)
-                      (let tl := n_tl tl (length params) in
-                        (map (mapt e) tl) ++
-                        [tApp (get_info_last "args" e) (rels_of "arglambda" e)])
-                  end
-                | _ => todo
-                end in
-              e <- mktProd (Savelist "args") e na (mapt e t1);;
-              kptProd NoSave e the_name (aux_nested e t1) t
-            end
-          (**********************)
-          | _ => kptProd (Savelist "args") e na
-                  (mapt e t1)
-                  t
-          end
-        in
-        let fix transformer_args args t: infolocal -> term :=
-          match args with
-          | [] => t
-          | arg :: args' => transformer_args args' (auxarg arg t)
-          end
-        in
-        transformer_args ctr.(cstr_args) transformer_result e
+      (*transforme the return type of constructor*)
+      (*'cons : ... -> vec A (S n)'   ~~~>   P (S n) (cons A a n v)
+                        ^^^^^^^^^^                                *)
+      let transformer_result :infolocal -> term := fun e =>
+        tApp (rel_of "P" e)
+          (
+            (map (mapt e) ctr.(cstr_indices))
+            ++
+            [tApp constructor_current
+              (rels_of "params" e ++ rels_of "args" e)]
+          )
       in
-      match b with
-      | [] => t e
-      | ctr :: l =>
-          mktProd NoSave e the_name
-            (auxctr e ctr i)
-            (fun e => Ffix e l t (i+1))
-      end
+      (*transforme the argument*)
+        (*A ~~~> forall (a:A) -> [t] *)
+        (*forall (n:nat) ~~~> forall (n:nat) -> [t]*)
+        (*vec A n ~~~> forall (v:vec A n) -> P n v -> [t] *)
+      let auxarg arg (t:infolocal -> term) :infolocal -> term :=
+        let t1 := arg.(decl_type) in
+        let na := arg.(decl_name) in
+        fun e =>
+        match t1 with
+        | tRel i =>
+          match is_rec_call e i with
+          | Some _ =>
+            e <- mktProd (Savelist "args") e na (tInd the_inductive []);;
+            kptProd NoSave e the_name
+              (tApp (rel_of "P" e) [get_info_last "args" e (*tRel 0*)])
+              t
+          (*ex. forall (n:nat)/  A*)
+          | None =>
+            (*save the argument n into information list "args"*)
+            kptProd (Savelist "args") e na
+              (mapt e t1)
+              t
+          end
+        (*ex. vec A n*)
+        | tApp (tRel i) tl =>
+          match is_rec_call e i with
+          | Some _ =>
+            (*save the argument v into information list "args"*)
+            e <-
+              mktProd (Savelist "args") e na
+                (*type of v: vec A n*)
+                (tApp (tInd the_inductive []) (map (mapt e) tl));;
+
+            (* P n v -> [t]*)
+            kptProd NoSave e the_name
+              (tApp
+                (rel_of "P" e)
+                (let tl := n_tl tl (length params) in
+                  (map (mapt e) tl) (*n*) ++ [get_info_last "args" e (*tRel 0*)] (*v*))
+              ) t
+          | None =>
+            kptProd (Savelist "args") e na
+              (mapt e t1)
+              t
+          end
+        (**********************)
+        | tProd na _ _ =>
+          match check_return_type t1 e with
+          | None => kptProd (Savelist "args") e na (mapt e t1) t
+          | Some _ =>
+            let fix aux_nested e t1 :=
+              match t1 with
+              | tProd na ta tb =>
+                kptProd (Savelist "arglambda") e na
+                  (mapt e ta) (fun e => aux_nested e tb)
+              | tRel _ =>
+                match is_rec_call e i with
+                | None => todo
+                | Some kk =>
+                  tApp (rel_of "P" e)
+                    [tApp (get_info_last "args" e) (rels_of "arglambda" e)]
+                end
+              | tApp (tRel _) tl =>
+                match is_rec_call e i with
+                | None => todo
+                | Some kk =>
+                  tApp (rel_of "P" e)
+                    (let tl := n_tl tl (length params) in
+                      (map (mapt e) tl) ++
+                      [tApp (get_info_last "args" e) (rels_of "arglambda" e)])
+                end
+              | _ => todo
+              end in
+            e <- mktProd (Savelist "args") e na (mapt e t1);;
+            kptProd NoSave e the_name (aux_nested e t1) t
+          end
+        (**********************)
+        | _ => kptProd (Savelist "args") e na
+                (mapt e t1)
+                t
+        end
+      in
+      fold_left_ie  (fun _ => auxarg) ctr.(cstr_args) (transformer_result)
     in
-    Ffix e b t 0
+    fold_right_ie
+      (fun i a t e => mktProd NoSave e the_name (auxctr i a e) t)
+      b t e
   in
 
   (*
@@ -185,7 +172,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
             (tSort sProp) (*Prop*)
         );;
   (*see details in the [aux] above*)
-  e <- aux e body.(ind_ctors);;
+  e <- aux body.(ind_ctors) e;;
     (*forall (i1:Ind1) ... (im:Indm),
       forall (x:T A1 ... Ak i1 ... im), P i1 ... im x*)
     e <- it_mktProd_default (Some "indices") e (indices);;
@@ -201,13 +188,6 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
 
 (****************************************************************)
 (*for mutual inductive type*)
-
-Fixpoint fold_right_i_aux {A B : Type} (f : B -> nat -> A -> A) i (l:list B) (a0 : A) :=
-  match l with
-  | [] => a0
-  | b :: l' => f b i (fold_right_i_aux f (S i) l' a0 )
-  end.
-
 Axiom print_context: forall {A}, infolocal -> A.
 
 Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body) : term :=
@@ -218,136 +198,125 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
   let (params, no_uniform_params) := SeperateParams kername ty in
 
   let aux (e:infolocal) (b:list constructor_body) (j:nat) (t:infolocal -> term) :term :=
-    let fix Ffix e b (t:infolocal -> term) i :=
-      let auxctr (e:infolocal) (ctr:constructor_body) i : term :=
-        let constructor_current :=
-          tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
-        let transformer_result :infolocal -> term := fun e =>
-          tApp (geti_info "P" e j)
-            (
-              rels_of "no_uniform_params" e
-              ++
-              (map (mapt e) ctr.(cstr_indices))
-              ++
-              [tApp constructor_current
-                (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
-            )
-        in
-        let auxarg arg (t:infolocal->term) :infolocal -> term := fun e =>
-          let t1 := arg.(decl_type) in
-          let na := arg.(decl_name) in
-          match arg.(decl_body) with
-          | Some t0 => kptLetIn NoSave e t0 na (mapt e t0) (mapt e t1) t
-          | None =>
-            match normal e t1 with
-            | None => print_context e
-            | Some t1 =>
-              match t1 with
-              | tRel i =>
-                match is_rec_call e i with
-                | Some kk =>
-                  mktProd (Savelist "args") e na
-                    (
+    let auxctr (i:nat) (ctr:constructor_body) (e:infolocal): term :=
+      let constructor_current :=
+        tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
+      let transformer_result :infolocal -> term := fun e =>
+        tApp (geti_info "P" e j)
+          (
+            rels_of "no_uniform_params" e
+            ++
+            (map (mapt e) ctr.(cstr_indices))
+            ++
+            [tApp constructor_current
+              (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
+          )
+      in
+      let auxarg arg (t:infolocal->term) :infolocal -> term := fun e =>
+        let t1 := arg.(decl_type) in
+        let na := arg.(decl_name) in
+        match arg.(decl_body) with
+        | Some t0 => kptLetIn NoSave e t0 na (mapt e t0) (mapt e t1) t
+        | None =>
+          match normal e t1 with
+          | None => print_context e
+          | Some t1 =>
+            match t1 with
+            | tRel i =>
+              match is_rec_call e i with
+              | Some kk =>
+                mktProd (Savelist "args") e na
+                  (
+                    (tInd
+                      {| inductive_mind := kername; inductive_ind := kk |}
+                      [])
+                  )
+                  (fun e =>
+                    kptProd NoSave e the_name
+                      (
+                        tApp (geti_info "P" e kk) (*tRel 0*)[get_info_last "args" e])
+                      t)
+              | None =>
+                kptProd (Savelist "args") e na
+                  (mapt e t1)
+                  t
+              end
+            | tApp (tRel i) tl =>
+              match is_rec_call e i with
+              | Some kk =>
+                mktProd (Savelist "args") e na
+                  (
+                    tApp
                       (tInd
                         {| inductive_mind := kername; inductive_ind := kk |}
                         [])
-                    )
-                    (fun e =>
-                      kptProd NoSave e the_name
-                        (
-                          tApp (geti_info "P" e kk) (*tRel 0*)[get_info_last "args" e])
-                        t)
-                | None =>
-                  kptProd (Savelist "args") e na
-                    (mapt e t1)
-                    t
-                end
-              | tApp (tRel i) tl =>
-                match is_rec_call e i with
-                | Some kk =>
-                  mktProd (Savelist "args") e na
-                    (
-                      tApp
-                        (tInd
-                          {| inductive_mind := kername; inductive_ind := kk |}
-                          [])
-                        (map (mapt e) tl))
-                    (fun e =>
-                      kptProd NoSave e the_name
-                        (tApp
-                          (geti_info "P" e kk)
-                          (let tl := n_tl tl (length params) in
-                            (map (mapt e) tl) ++ [(get_info_last "args" e)])
-                        ) t)
-                | None =>
-                  kptProd (Savelist "args") e na
-                    (mapt e t1)
-                    t
-                end
-              (*****************************************)
-              | tProd na _ _ =>
-                match check_return_type t1 e with
-                | None => kptProd (Savelist "args") e na ( mapt e t1) t
-                | Some _ =>
-                  let fix aux_nested e t1 :=
-                    match t1 with
-                    | tProd na ta tb =>
-                      kptProd (Savelist "arglambda") e na
-                        (mapt e ta) (fun e => aux_nested e tb)
-                    | tRel i =>
-                      match is_rec_call e i with
-                      | None => todo
-                      | Some kk =>
-                        tApp (geti_info "P" e kk)
-                          [tApp (get_info_last "args" e) (rels_of "arglambda" e)]
-                      end
-                    | tApp (tRel i) tl =>
-                      match is_rec_call e i with
-                      | None => todo
-                      | Some kk =>
-                        tApp (geti_info "P" e kk)
-                          (let tl := n_tl tl (length params) in
-                            (map (mapt e) tl) ++
-                            [tApp (get_info_last "args" e) (rels_of "arglambda" e)])
-                      end
-                    | _ => todo end in
-                  mktProd (Savelist "args") e na (mapt e t1)
-                    (fun e => kptProd NoSave e the_name (aux_nested e t1) t)
-                end
-              (*****************************************)
-              | _ => kptProd (Savelist "args") e na
-                      (mapt e t1)
-                      t
+                      (map (mapt e) tl))
+                  (fun e =>
+                    kptProd NoSave e the_name
+                      (tApp
+                        (geti_info "P" e kk)
+                        (let tl := n_tl tl (length params) in
+                          (map (mapt e) tl) ++ [(get_info_last "args" e)])
+                      ) t)
+              | None =>
+                kptProd (Savelist "args") e na
+                  (mapt e t1)
+                  t
               end
+            (*****************************************)
+            | tProd na _ _ =>
+              match check_return_type t1 e with
+              | None => kptProd (Savelist "args") e na ( mapt e t1) t
+              | Some _ =>
+                let fix aux_nested e t1 :=
+                  match t1 with
+                  | tProd na ta tb =>
+                    kptProd (Savelist "arglambda") e na
+                      (mapt e ta) (fun e => aux_nested e tb)
+                  | tRel i =>
+                    match is_rec_call e i with
+                    | None => todo
+                    | Some kk =>
+                      tApp (geti_info "P" e kk)
+                        [tApp (get_info_last "args" e) (rels_of "arglambda" e)]
+                    end
+                  | tApp (tRel i) tl =>
+                    match is_rec_call e i with
+                    | None => todo
+                    | Some kk =>
+                      tApp (geti_info "P" e kk)
+                        (let tl := n_tl tl (length params) in
+                          (map (mapt e) tl) ++
+                          [tApp (get_info_last "args" e) (rels_of "arglambda" e)])
+                    end
+                  | _ => todo end in
+                mktProd (Savelist "args") e na (mapt e t1)
+                  (fun e => kptProd NoSave e the_name (aux_nested e t1) t)
+              end
+            (*****************************************)
+            | _ => kptProd (Savelist "args") e na
+                    (mapt e t1)
+                    t
             end
           end
-        in
-        let fix transformer_args args t: infolocal -> term :=
-          match args with
-          | [] => t
-          | arg :: args' => transformer_args args' (auxarg arg t)
-          end
-        in
-        transformer_args ctr.(cstr_args) transformer_result e
+        end
       in
-      match b with
-      | [] => t e
-      | ctr :: l =>
-          mktProd NoSave e the_name
-          (it_kptProd_default (Some "no_uniform_params") e (no_uniform_params) $
-            fun e => auxctr e ctr i)
-          (fun e => Ffix e l t (i+1))
-      end
+      fold_left_ie (fun _ => auxarg) ctr.(cstr_args) (transformer_result) e
     in
-    Ffix e b t 0
+    fold_right_ie
+      (fun i a t e =>
+        mktProd NoSave e the_name
+          (it_kptProd_default (Some "no_uniform_params") e (no_uniform_params) $
+            auxctr i a) t
+      ) b t e
   in
   let mainbody := hd todo bodies in
   let indices_main := mainbody.(ind_indices) in
   let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
 
   it_kptProd_default (Some "params") initial_info params $
-    fold_right_i_aux (
-      fun body i t => fun e =>
+    fold_right_ie (
+      fun i body t e =>
         let the_inductive := {| inductive_mind := kername; inductive_ind :=i |} in
         let indices := body.(ind_indices) in
         mktProd (Savelist "P") e prop_name
@@ -359,10 +328,10 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
               (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
             (tSort sProp)
           ) t
-    ) 0 bodies
-      (fold_right_i_aux
-        (fun body i t => fun e => aux e body.(ind_ctors) i t)
-        0 bodies
+    ) bodies
+      (fold_right_ie
+        (fun i body t e => aux e body.(ind_ctors) i t)
+        bodies
         (fun e =>
           e <- it_kptProd_default (Some "no_uniform_params") e (no_uniform_params);;
           e <- it_mktProd_default (Some "indices") e (indices_main);;

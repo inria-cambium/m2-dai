@@ -548,6 +548,23 @@ Definition it_kptLambda_default := it_kptbind_default tLambda.
 Definition it_mktLambda_default := it_mktbind_default tLambda.
 
 
+Definition fold_left_ie {A} (tp:nat -> A -> (infolocal -> term) -> infolocal -> term)
+  (l:list A) (t : infolocal -> term) : infolocal -> term :=
+  let fix aux l n t : infolocal -> term :=
+    match l with
+    | [] => t
+    | a :: l => aux l (S n) (tp n a t)
+  end in
+  aux l 0 t.
+
+Definition fold_right_ie {A} (tp:nat -> A -> (infolocal -> term) -> infolocal -> term)
+  (l:list A) (t : infolocal -> term) : infolocal -> term :=
+  let fix aux l n t : infolocal -> term :=
+    match l with
+    | [] => t
+    | a :: l => tp n a (aux l (S n) t)
+  end in
+  aux l 0 t.
 
 (*
 Remark: how to choose [mktbind] [kptbind]:
