@@ -524,3 +524,10 @@ Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:infolocal)
   Ffix ctx e acc.
 
 (* Axiom print_info: infolocal -> forall {A}, A. *)
+
+Definition normal e t :option term :=
+  let renaming := e.(renaming) in
+  let ctx :=
+    mapi (fun i t => mkdecl t.(decl_name) t.(decl_body) (tRel i)) renaming
+  in
+  reduce_opt RedFlags.default empty_global_env ctx 100 t.

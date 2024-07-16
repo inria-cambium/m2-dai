@@ -290,7 +290,12 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
         let auxarg arg (t:infolocal->term) :infolocal -> term :=
           let t1 := arg.(decl_type) in
           let na := arg.(decl_name) in
-          fun e =>
+        match arg.(decl_body) with
+        | Some t0 => kptLetIn NoSave e t0 na (mapt e t0) (mapt e t1) t
+        | None =>
+          match normal e t1 with
+          | None => print_context e
+          | Some t1 =>
           match t1 with
           | tRel i =>
             match is_recursive_call_gen e i with
