@@ -333,8 +333,9 @@ Definition rel_of (na:string) (e:infolocal) :=
 
     when we use the function below to check this `nforest`, it should return `Some 0`.
 *)
-Definition is_recursive_call_gen (e:infolocal) i : option nat:=
-  let l := map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
+
+Definition is_rec_call (e:infolocal) i : option nat:=
+  let l := rev_map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
   let fix Ffix l j :=
     match l with
     | k :: l0 => if eqb k i then Some j else Ffix l0 (j+1)
@@ -346,7 +347,7 @@ Definition is_recursive_call_gen (e:infolocal) i : option nat:=
 (* Transform the `type term` in the source
           to the `type term` in the target
 *)
-Definition type_rename_transformer (e:infolocal) (t:term) : term:=
+Definition mapt (e:infolocal) (t:term) : term:=
   let n_ind := length (lookup_list e.(info_source) "rels_of_T") in
   let fix Ffix e t :=
     match t with
