@@ -28,6 +28,146 @@ induction n.
   exact (IHn H0).
 Qed.
 
+(* Lemma lem000 {l nind str str'}:
+  has_info l str nind ->
+  has_info (replace_add_l l str') str nind.
+Admitted. *)
+(* 
+Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
+  kn ind_npars'
+  (ta:forall {n' m'}, forall l', has_info l' "P" nind -> cinfo n' m' nind l' -> cterm n')
+  : has_info l "P" nind -> cinfo n m nind l -> cterm n :=
+  let t1 := proj1_sig arg.(decl_type) in
+  let na := arg.(decl_name) in
+  fun h e  =>
+  (match t1 as t0 return t1 = t0 -> cterm n with
+  | tRel i =>
+    fun eq =>
+    match is_rec_call e i with
+    | Some kk =>
+      e <- mkcProd (Some "args") na e
+            (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} [])) ;;
+      kpcProd None the_name e
+        (cterm_lift _ $ cApp (geti_info "P" e (proj1_sig kk) _) [geti_info "args" e 0 _])
+        (@ta _ _ _ _)
+    | None =>
+      kpcProd (Some "args") na e
+        (mapt e t1)
+        (@ta _ _ _ _)
+    end
+  (*ex. vec A n*)
+  | tApp (tRel i) tl =>
+    fun eq =>
+    match is_rec_call e i with
+    | Some kk =>
+      (*save the argument v into information list "args"*)
+      e <- mkcProd (Some "args") na e
+            (cApp
+              (* (exist _ (tInd the_inductive []) _) *)
+              (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} []))
+              (map_In tl (fun t' h' => mapt e (existc t'))));;
+
+      (* P n v -> [t]*)
+      kpcProd None the_name e
+        (cterm_lift _ $ cApp
+          (geti_info "P" e (proj1_sig kk) _)
+          (let tl := n_tl tl (ind_npars') in
+            (map_In tl (fun t' h' => mapt e (existc t'))) (*n*)
+            ++ [geti_info "args" e 0 _(*tRel 0*)] (*v*))
+        )         (@ta _ _ _ _)
+
+    | None =>
+      kpcProd (Some "args") na e
+        (mapt e t1)
+        (@ta _ _ _ _)
+    end
+  | tApp _ _ => fun eq => kpcProd (Some "args") na e
+                  (mapt e t1)
+                  (@ta _ _ _ _)
+  | tProd na _ _ => (*todo*)
+          fun eq => kpcProd (Some "args") na e
+                          (mapt e t1)
+                          (@ta _ _ _ _)
+  | _ => fun eq => kpcProd (Some "args") na e
+          (mapt e t1)
+          (@ta _ _ _ _)
+  end) eq_refl.
+Next Obligation. eapply lem_has_info_within1. exact H. all:auto. Qed.
+Next Obligation. eapply lem_within_replace. Qed.
+Next Obligation. exact (lem000 h). Qed.
+
+Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto).
+Solve All Obligations.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+(* Next Obligation. exact (lem000 h). Qed. *)
+Next Obligation.
+  destruct arg. destruct decl_type. simpl. simpl in eq.
+  rewrite eq in i0. eapply lem_app_closed. exact i0. auto.
+Qed.
+Next Obligation. eapply lem_has_info_within1. exact H. all:auto. Qed.
+Next Obligation.
+  destruct arg. destruct decl_type. simpl. simpl in eq.
+  rewrite eq in i0. eapply lem_app_closed. exact i0. eapply lem_ntl1. exact h'.
+Qed.
+
+Next Obligation. eapply lem_within_replace. Qed.
+
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed.
+Next Obligation. exact (lem000 h). Qed. *)
+
+
+(* Next Obligation. eapply lem_has_info_within1. exact H. all:auto. Qed.
+Next Obligation. eapply lem_within_replace. Qed.
+Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto).
+Next Obligation.
+  destruct arg. destruct decl_type. simpl. simpl in eq.
+  rewrite eq in i0. eapply lem_app_closed. exact i0. auto.
+Qed.
+Next Obligation. eapply lem_has_info_within1. exact H. all:auto. Qed.
+Next Obligation.
+  destruct arg. destruct decl_type. simpl. simpl in eq.
+  rewrite eq in i0. eapply lem_app_closed. exact i0. eapply lem_ntl1. exact h'.
+Qed.
+Next Obligation. eapply lem_within_replace. Qed.
+Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto). *)
+(* Next Obligation. *)
+
+
 
 Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
   (h:has_info l "P" nind) kn ind_npars'
@@ -42,9 +182,9 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
     match is_rec_call e i with
     | Some kk =>
       e <- mkcProd (Some "args") na e
-            (existc (tInd {| inductive_mind := kn; inductive_ind := kk |} [])) ;;
+            (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} [])) ;;
       kpcProd None the_name e
-        (cterm_lift _ $ cApp (geti_info "P" e (proj1_sig kk) _) [get_info_last "args" e _])
+        (cterm_lift _ $ cApp (geti_info "P" e (proj1_sig kk) _) [geti_info "args" e 0 _])
         ta
     | None =>
       kpcProd (Some "args") na e
@@ -60,7 +200,7 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
       e <- mkcProd (Some "args") na e
             (cApp
               (* (exist _ (tInd the_inductive []) _) *)
-              (existc (tInd {| inductive_mind := kn; inductive_ind := kk |} []))
+              (existc (tInd {| inductive_mind := kn; inductive_ind := nind -1 - kk |} []))
               (map_In tl (fun t' h' => mapt e (existc t'))));;
 
       (* P n v -> [t]*)
@@ -69,7 +209,7 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
           (geti_info "P" e (proj1_sig kk) _)
           (let tl := n_tl tl (ind_npars') in
             (map_In tl (fun t' h' => mapt e (existc t'))) (*n*)
-            ++ [get_info_last "args" e _] (*v*))
+            ++ [geti_info "args" e 0 _(*tRel 0*)] (*v*))
         ) ta
     | None =>
       kpcProd (Some "args") na e
@@ -91,11 +231,9 @@ Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
 Next Obligation.
   eapply lem_has_info_within1. exact H. all:auto.
 Qed.
-(* Next Obligation. eapply lem_within_replace. Qed. *)
 Next Obligation. eapply lem_within_replace. Qed.
 Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto).
-Next Obligation.
-  destruct arg. destruct decl_type. simpl. simpl in eq.
+Next Obligation. destruct arg. destruct decl_type. simpl. simpl in eq.
   rewrite eq in i0. eapply lem_app_closed. exact i0. auto.
 Qed.
 Next Obligation.
@@ -107,7 +245,7 @@ Next Obligation.
 Qed.
 Next Obligation. eapply lem_within_replace. Qed.
 Solve All Obligations with (destruct arg; destruct decl_type; simpl; auto).
-(* Next Obligation. *)
+
 
 Program Fixpoint Ffix_args {n k nind m} {l}
         (args:context_closed k m) (h:has_info (addl' l "args" m) "P" nind)
@@ -138,14 +276,14 @@ Program Definition transformer_result {n k nind l} j
   constructor_current indices
   (h:has_info l "P" nind) (hj: j < nind)
   :cinfo n k nind l -> cterm n := fun e =>
-  cApp (geti_info "P" e (nind - j - 1) _)
+  cApp (geti_info "P" e j _)
     (
       (map (mapt e) indices)
       ++
       [cApp constructor_current
         (rels_of "params" e ++ rels_of "args" e)]
     ).
-Next Obligation. eapply lem_has_info_within0. 2:exact h. lia. Qed.
+Next Obligation. eapply lem_has_info_within0. exact hj. auto. Qed.
 (* Next Obligation. *)
 
 
@@ -168,14 +306,14 @@ Program Fixpoint Ffix_ctrs {n m nind l} (b:list (constructor_body_closed m))
   (j:nat) (i:nat) (h:has_info l "P" nind) (hj:j<nind) (kn:kername) (ind_npars':nat)
   (t:forall n', cinfo n' m nind l -> cterm n')
   : cinfo n m nind l -> cterm n :=
-  (match b as b0 return cinfo n m nind l -> cterm n with
-  | [] => fun e => t _ (mkcinfo (ei e) _ _ _)
-  | ctr :: b' => fun e =>
+  (match b as b0 return b = b0 -> cinfo n m nind l -> cterm n with
+  | [] => fun eq => fun e => t _ (mkcinfo (ei e) _ _ _)
+  | ctr :: b' => fun eq => fun e =>
       @mkcProd _ _ _ l None the_name e
         (@auxctr _ _ _ l ctr j i  _ _ kn ind_npars'(add_emp_info' e "args"))
         (Ffix_ctrs b' j
           (S i) _ _ kn ind_npars' t)
-  end) .
+  end) eq_refl.
 Next Obligation. destruct e. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
@@ -191,90 +329,10 @@ Next Obligation. destruct e. auto. Qed.
 (* Next Obligation. *)
 
 
-
-
-
-
-
-(* Program Fixpoint Ffix_bodys {n k nind l A} (i:nat) (lb:list A)
-  (a0 : cinfo (#|lb| + n) k nind (("P", #|lb|)::l) -> cterm (#|lb| + n)) :
-  cinfo n k nind (("P", 0)::l) -> cterm n :=
-  (match lb as lb' return lb = lb' -> cinfo n k nind (("P",0)::l) -> cterm n with
-  | [] => fun eq => fun e => cterm_lift _ (a0 (mkcinfo (ei e) _ _ _))
-  | body :: lb' => fun eq =>
-    Ffix_bodys (S i) lb'
-      (fun e =>
-        mkcProd (Some "P") prop_name e todo
-          (fun e'' => cterm_lift _ (a0 (mkcinfo (ei e'') _ _ _))))
-  end) eq_refl.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed. *)
-
-
-(*
-
-Record infolocal : Type := mkinfo {
-  info : list (string * list (BasicAst.context_decl nat)) ;
-  ...
-}.
-
-Record cinfo (n k nind:nat) (l:list (string * nat)) :Type := mkcinfo {
-  ei: infolocal;
-  ...
-  Pl : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| = y.2) ei.(info) l;
-}.
-
-*)
-
-(*
-  Ffix_bodys bodys
-    (fun e => todo (* something may use the information_list "P"*))
-    e
-*)
-
-(* Print mkcinfo. *)
-
-(* Program Fixpoint Ffix_bodys' {n k nind l A} i
-  (lb:list A) m
-  (a0 : forall n', cinfo n' k nind (("P", m)::l) -> cterm n') :
-
-  cinfo n k nind (("P",0)::l) -> cterm n :=
-
-  (match lb as lb' return lb = lb' -> cinfo n k nind (("P",0)::l) -> cterm n with
-
-  | [] => fun eq => fun e => a0 _ (mkcinfo (ei e) _ _ _)
-  | body :: lb' => fun eq =>
-    Ffix_bodys' (S i) lb' _
-      (fun n' e =>
-        mkcProd (Some "P") prop_name e todo
-          (fun e'' => a0 _ (mkcinfo (ei e'') _ _ _)))
-  end) eq_refl.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed. *)
-(* Next Obligation. *)
-
-
-
-
-
-
-(* Next Obligation. *)
-
-
 Program Fixpoint Ffix_bodys {n k nind l} i lb kn
-  (a0 : forall n', cinfo (n') k nind (("P", #|lb|)::l) -> cterm (n')) :
-
-  cinfo n k nind (("P",0)::l) -> cterm n :=
-
-  (match lb as lb' return lb = lb' -> cinfo n k nind (("P",0)::l) -> cterm n with
+  (a0 : forall n', cinfo (n') k nind (addl' l "P" #|lb|) -> cterm (n')) :
+  cinfo n k nind _ -> cterm n :=
+  (match lb as lb' return lb = lb' -> cinfo n k nind (addl' l "P" 0) -> cterm n with
   | [] => fun eq => fun e => a0 _ (mkcinfo (ei e) _ _ _)
   | body :: lb' => fun eq =>
     Ffix_bodys (S i) lb' kn
@@ -287,50 +345,25 @@ Program Fixpoint Ffix_bodys {n k nind l} i lb kn
               (cApp (existc (tInd the_inductive []))
                 (rels_of "params" e'' ++ rels_of "indices" e''))
               (existc (tSort sProp))
-          ) (fun e'' => a0 _ (mkcinfo (ei e'') _ _ _)))
-  end) eq_refl.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e. auto. Qed.
-Next Obligation. destruct e. auto. Qed.
-(* Next Obligation. lia. Qed. *)
-Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed.
-
-
-(* Program Fixpoint Ffix_bodys' {n k nind l} i lb kn
-  (a0 : forall n', cinfo (n') k nind (addl' l "P" #|lb|) -> cterm (n')) :
-  cinfo n k nind (addl' l "P" 0) -> cterm n :=
-  (match lb as lb' return lb = lb' -> cinfo n k nind (addl' l "P" 0) -> cterm n with
-  | [] => fun eq => fun e => a0 _ (mkcinfo (ei e) _ _ _)
-  | body :: lb' => fun eq => fun e =>
-      let the_inductive := {| inductive_mind := kn; inductive_ind := i |} in
-      let indices := ind_indices' _ body in
-      mkcProd (Some "P") prop_name e
-        (it_mkcProd ("indices") (indices) e $
-          fun e'' => cProd the_name
-            (cApp (existc (tInd the_inductive []))
-              (rels_of "params" e'' ++ rels_of "indices" e''))
-            (existc (tSort sProp))
-        ) (Ffix_bodys' (S i) lb' kn _)
+          ) (fun e'' => a0 _ (mkcinfo (ei e'') _ _ _))
+        )
     end) eq_refl.
 Next Obligation. destruct e. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
 Next Obligation. destruct e. auto. Qed.
-(* Next Obligation. lia. Qed. *)
 Next Obligation. destruct e''. auto. Qed.
 Next Obligation. destruct e''. auto. Qed.
-Next Obligation. destruct e''. auto. Qed. *)
+Next Obligation. destruct e''. auto. Qed.
 
 
-Program Fixpoint Ffix_bodys_2 {n m nind l} i lb h
-  (hi:i + #|lb| <= nind) kn ind_npars
+Program Fixpoint Ffix_bodys_2 {n m nind l} i bl h
+  (hi:i + #|bl| <= nind) kn ind_npars
   (t: forall n', cinfo (n') m nind l -> cterm (n')):
   cinfo n m nind l -> cterm n :=
-  match lb with
+  match bl with
   | [] => t _
-  | b :: lb' =>
-    Ffix_bodys_2 (S i) lb' h _ kn ind_npars (
+  | b :: bl' =>
+    Ffix_bodys_2 (S i) bl' h _ kn ind_npars (
       fun n' =>
         Ffix_ctrs (ind_ctors' _ b) i 0
           h _ kn ind_npars t
@@ -339,20 +372,6 @@ Next Obligation. lia. Qed.
 Next Obligation. lia. Qed.
 (* Next Obligation. *)
 (* Print auxnew. *)
-
-(* Program Fixpoint Ffix_body3 {n m nind l} i lb h
-  (hi:i + #|lb| <= nind) kn ind_npars
-  (t: forall n', cinfo (n') m nind l -> cterm (n')):
-  cinfo n m nind l -> cterm n :=
-  match lb with
-  | [] => t _
-  | b :: lb' =>
-    Ffix_ctrs (ind_ctors' _ b) i 0
-      h _ kn ind_npars (fun n' => Ffix_body3 (S i) lb' h _ kn ind_npars t)
-    end.
-Next Obligation. lia. Qed.
-Next Obligation. lia. Qed. *)
-(* Next Obligation. *)
 
 
 Program Definition GenerateIndp_mutual (kername : kername)
@@ -377,7 +396,7 @@ Program Definition GenerateIndp_mutual (kername : kername)
               mkcProd (Some "x") the_name e
                 (cApp (tInd the_inductive_main [])
                   (rels_of "params" e ++ rels_of "indices" e))
-              (fun e => cApp (geti_info "P" e 0  _)
+              (fun e => cApp (geti_info "P" e (n_ind - 1 (*todo*)) _)
                 (rels_of "indices" e ++ [rel_of "x" e _])))
         )
         (add_emp_info' e1 "P")
@@ -420,3 +439,20 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
     end.
 
 Notation "'Derive' 'InductivePrinciple' a 'as' id" := (generate_indp a (Some id)) (at level 0).
+
+
+Inductive myvec (A:Type) : nat -> Type :=
+ | myvnil : myvec A 0
+ | myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
+MetaCoq Run Derive InductivePrinciple myvec as "indp_myvec".
+Print indp_myvec.
+
+
+
+Inductive ntree (A:Set) : Set :=
+  nnode : A -> nforest A -> ntree A
+with nforest (A:Set) : Set :=
+  | nnil: nforest A
+  | ncons : ntree A -> nforest A -> nforest A.
+MetaCoq Run Derive InductivePrinciple ntree as "indp_ntree".
+Print indp_ntree.

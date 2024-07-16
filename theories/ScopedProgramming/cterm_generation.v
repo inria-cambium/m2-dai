@@ -27,7 +27,7 @@ Program Definition is_rec_call {n m nind l} (e:cinfo n m nind l) i :
   | false => None
   | true => match Nat.leb (nrenaming - nind) i with
              | false => None
-             | true => Some (existc (i - (nrenaming - nind))) end end.
+             | true => Some (existc (nrenaming - i - 1)) end end.
 Next Obligation.
   destruct e0. destruct ei. simpl. simpl in Heq_anonymous, Heq_anonymous0.
   apply eq_sym in Heq_anonymous.

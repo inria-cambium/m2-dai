@@ -335,12 +335,11 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
         (fun e =>
           e <- it_kptProd_default (Some "no_uniform_params") e (no_uniform_params);;
           e <- it_mktProd_default (Some "indices") e (indices_main);;
-          mktProd (Saveitem "x") e the_name
-            (
-              tApp (tInd the_inductive_main [])
-                (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
-            (fun e => tApp (geti_info "P" e 0)
-              (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e])))
+          e <- mktProd (Saveitem "x") e the_name
+                (tApp (tInd the_inductive_main [])
+                  (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e));;
+          tApp (geti_info "P" e 0)
+              (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e]))
       )
   .
 

@@ -265,7 +265,7 @@ Definition fancy_tCase (e:infolocal) t0 t2 t3 t4 t5 t6 t7 (t8:infolocal -> list 
   let pcontext := t5 e in
   let pparams := t4 e in
   (*very limited*)
-  let update_pcontext pcontext e :=
+  (* let update_pcontext pcontext e :=
     let renaming := e.(renaming) in
     let info := e.(info) in
     let info_new := map (
@@ -283,6 +283,12 @@ Definition fancy_tCase (e:infolocal) t0 t2 t3 t4 t5 t6 t7 (t8:infolocal -> list 
     let renaming_new := redo lift_renaming (length pcontext) renaming in
     let info_new := ("pcontext_indices", information_list l) :: info_new in
     mkinfo renaming_new info_new info_source e.(kn)
+  in *)
+  let update_pcontext pcontext e :=
+    let e := fold_right (fun na e => update_kp na e NoSave) e pcontext in
+    let l:= mapi (fun i x => mkdeclnat x None (i+1)) (tl pcontext) in
+    let info_new := ("pcontext_indices", information_list l) :: e.(info) in
+    mkinfo e.(renaming) info_new e.(info_source) e.(kn)
   in
   tCase
     {|
@@ -302,6 +308,9 @@ Definition fancy_tCase (e:infolocal) t0 t2 t3 t4 t5 t6 t7 (t8:infolocal -> list 
       {| bcontext := map decl_name c;
          bbody := t (add_args e c) |})
     (t8 e)).
+
+
+(* Print closedn. *)
 
 Local Definition update_ctr_arg_back (e:infolocal) : infolocal :=
   let info_new := map (
@@ -565,6 +574,9 @@ Definition fold_right_ie {A} (tp:nat -> A -> (infolocal -> term) -> infolocal ->
     | a :: l => tp n a (aux l (S n) t)
   end in
   aux l 0 t.
+
+
+
 
 (*
 Remark: how to choose [mktbind] [kptbind]:

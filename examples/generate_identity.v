@@ -119,7 +119,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
           (fun _ => Relevant)
           (fun _ => [])
           (fun e => rels_of "params" e)
-          (fun e => repeat the_name (1 + length (lookup_list e.(info) "indices")))
+          (fun e => repeat the_name (1 + length indices))
           (fun e =>
             tApp (tInd the_inductive Instance.empty)
             ((rels_of "params" e ) ++ (rels_of "pcontext_indices" e)))
@@ -155,3 +155,13 @@ Definition generate_identity {A} (a : A) (out : option ident): TemplateMonad uni
 
 Notation "'Derive' 'Identity' a 'as' id" := (generate_identity a (Some id)) (at level 0).
 Notation "'Print' 'Identity' a" := (generate_identity a None) (at level 0).
+
+(* Load MetaCoqPrelude.
+
+Definition thisfile := $run (tmCurrentModPath tt).
+Inductive vec' (X:Type) : nat -> Type:=
+  | vnil' : vec' X O
+  | vcons' : X -> forall n:nat, vec' X n -> vec' X (S n).
+
+Definition inputf := ($run (tmQuoteInductive (thisfile, "vec'"))).
+Compute $Quote vec'_ind. *)

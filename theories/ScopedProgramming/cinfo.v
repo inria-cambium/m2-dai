@@ -497,13 +497,13 @@ Qed.
 
 Program Definition geti_info {n k nind l} (na:string) (e:cinfo n k nind l) (i:nat)
   (h:within_info l na i) :cterm n :=
-  let l := (lookup_list (ei e) na) in
+  let l := rev (lookup_list (ei e) na) in
   match nth_error l i with
   | Some x => existc (tRel (decl_type x))
   | None => todo end.
 Next Obligation.
   assert (nth_error
-          (lookup_list (ei e) na)
+          (rev (lookup_list (ei e) na))
           i = Some x). auto.
   eapply nth_error_In in H.
   unfold lookup_list in H. destruct e. destruct ei0. simpl in H.
@@ -525,6 +525,48 @@ Next Obligation.
        exact (f0 p  H0).
     ++
       destruct p.
+      (* apply Forall_forall in H2. *)
+      assert (forall x, In x l -> Nat.ltb (decl_type x) n).
+      (* eapply Forall *)
+      rewrite Forall_forall in H2.
+      intro x0. intro.
+      assert (In (decl_type x0) (map decl_type l)).
+      eapply in_map. auto.
+      eapply H2 in H4. auto. eapply H3. eapply In_rev. auto.
+  + inversion H.
+Qed.
+
+Program Definition get_info_last {n k nind l} (na:string) (e:cinfo n k nind l)
+  (h:within_info l na 0) :cterm n :=
+  let l := (lookup_list (ei e) na) in
+  match nth_error l 0 with
+  | Some x => existc (tRel (decl_type x))
+  | None => todo end.
+Next Obligation.
+  assert (nth_error
+          ( (lookup_list (ei e) na))
+          0 = Some x). auto.
+  eapply nth_error_In in H.
+  unfold lookup_list in H. destruct e. destruct ei0. simpl in H.
+  destruct (find  (fun
+              i : string
+                  × list
+                      (BasicAst.context_decl nat)
+            =>
+            let (na', _) := i in
+            String.eqb na na') info0 ) eqn:e0.
+  + eapply find_some in e0. destruct e0.
+    destruct ci0.
+    simpl in f0.
+    assert (let '(_,l) := p in Forall
+              (fun x : nat => PeanoNat.Nat.ltb x n)
+              (map decl_type l)).
+    ++ clear h  Heq_anonymous.
+       rewrite Forall_forall in f0.
+       exact (f0 p  H0).
+    ++
+      destruct p.
+      (* apply Forall_forall in H2. *)
       assert (forall x, In x l -> Nat.ltb (decl_type x) n).
       (* eapply Forall *)
       rewrite Forall_forall in H2.
@@ -534,6 +576,9 @@ Next Obligation.
       eapply H2 in H4. auto. auto.
   + inversion H.
 Qed.
+
+
+
 
 Program Definition rel_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l)
   (h:within_info l na 0) : cterm n :=
