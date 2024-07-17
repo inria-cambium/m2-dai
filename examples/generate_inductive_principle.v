@@ -190,7 +190,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : term :=
 (*for mutual inductive type*)
 Axiom print_context: forall {A}, infolocal -> A.
 
-Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body) : term :=
+Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body) (n:nat): term :=
   let params := ty.(ind_params) in
   let initial_info := make_initial_info kername ty in
   let bodies := ty.(ind_bodies) in
@@ -310,7 +310,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
             auxctr i a) t
       ) b t e
   in
-  let mainbody := hd todo bodies in
+  let mainbody := nth n bodies todo in
   let indices_main := mainbody.(ind_indices) in
   let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
 
@@ -343,6 +343,7 @@ Definition GenerateIndp_mutual (kername : kername) (ty :  mutual_inductive_body)
       )
   .
 
+Definition GenerateIndp_mutual kn ty := GenerateIndp_mutual' kn ty 0.
 
 Definition kn_myProjT2 :=
   (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], "my_projT2").

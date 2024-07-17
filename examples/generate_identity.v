@@ -36,7 +36,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
             (rev
               (let auxarg arg e:=
                 (*current argument*)
-                let arg_current := rel_of "arg_current" e in
+                let arg_current := get_arg_current e in
                 match arg.(decl_type) with
                 (*type with indice/parameter*)
                 | tApp (tRel j) tl =>
@@ -84,7 +84,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                   match check_return_type arg.(decl_type) e with
                   | None => arg_current
                   | Some _ =>
-                      transformer arg.(decl_type) e (fun e => rel_of "arg_current" e)
+                      transformer arg.(decl_type) e (fun e => get_arg_current e)
                   end
                   (***********)
                 | _ => arg_current end
@@ -114,15 +114,16 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         e <- mktLambda (Saveitem "x") e the_name
               (tApp (tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;
-        fancy_tCase e
-          (fun _ => the_inductive)
-          (fun _ => Relevant)
+        mktCase e
+          {|  ci_ind := the_inductive;
+              ci_npar := length params;
+              ci_relevance := Relevant |}
           (fun _ => [])
           (fun e => rels_of "params" e)
           (fun e => repeat the_name (1 + length indices))
           (fun e =>
             tApp (tInd the_inductive Instance.empty)
-            ((rels_of "params" e ) ++ (rels_of "pcontext_indices" e)))
+            ((rels_of "params" e ) ++ (remove_last (get_pcontext e))))
           (fun e => rel_of "x" e)
           (fun e => mapi (aux e) body.(ind_ctors));
 
