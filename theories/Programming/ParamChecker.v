@@ -39,7 +39,7 @@ Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool
             fun i t =>
               match t with
               | tRel k =>
-                  if tRel k == (geti_info "params" e (npars-1-i))
+                  if tRel k == (geti_info "params" e i)
                   then true else false
               | _ => false end
             ) (firstn npars tl))
