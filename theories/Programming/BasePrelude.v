@@ -543,13 +543,13 @@ Definition mktCase (e:infolocal)
 (*Used only in mktCase, 'match with', to be explained *)
 Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
   (e:infolocal) :=
-  let fix Ffix f l e:=
+  let fix Ffix f l e acc:=
     match l with
-    | x :: l => (f x e) :: (Ffix f l (update_ctr_arg_back e))
-    | _ => []
+    | x :: l => Ffix f l (update_ctr_arg_back e) ((f x e) :: acc)
+    | _ => acc
     end
   in
-  Ffix f l e.
+  Ffix f l e [].
 
 
 (*
