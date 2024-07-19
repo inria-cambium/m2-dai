@@ -191,9 +191,9 @@ Local Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   end
   .
 
-Local Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:term) :=
+Local Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:option term) :=
   let item := mkdeclnat na None 0 in
-  let item_rename := mkdecl na (Some t) (tRel 0) in
+  let item_rename := mkdecl na (t) (tRel 0) in
   let renaming :=
     item_rename :: (lift_renaming e.(renaming))
   in
@@ -240,46 +240,13 @@ Local Definition geti_rename (e:infolocal) (i:nat) :=
   (nth i l todo).
 
 (**************************************)
-Local Definition add_args (e:infolocal) (ctx: context): infolocal :=
-  let nargs := length ctx in
-  let l:= mapi (fun i x => mkdecl x.(decl_name) None (tRel i)) (ctx) in
-  (*start with the last argument*)
-  let renaming := (tl l)
-    ++ (redo lift_renaming nargs e.(renaming)) in
-  let info_new := map (
-    fun x => match x with
-    | (na, information_list l) => (na, information_list (plus_k_index l nargs))
-    | (na, information_nat n) => (na, information_nat (n + nargs)) end
-    ) e.(info) in
-  let info_source := map (
-    fun x => match x with
-    | (na, information_list l) => (na, information_list (plus_k_index l (nargs-1)))
-    | (na, information_nat n) => (na, information_nat (n + nargs)) end
-    ) e.(info_source) in
-  let arg := information_nat 0 in
-  mkinfo (renaming) (("arg_current", arg):: info_new) info_source e.(kn).
-
-Local Definition update_ctr_arg_back (e:infolocal) : infolocal :=
-  let info_new := map (
-    fun x => match x with
-    | (na, information_list l) => x
-    | (na, information_nat n) =>
-        if String.eqb "arg_current" na then (na, information_nat (n + 1))
-        else x end
-  ) e.(info) in
-  let info_source := map (
-    fun x => match x with
-    | (na, information_list l) => (na, information_list (minus_one_index l))
-    | (na, information_nat n) => x end
-  ) e.(info_source) in
-  mkinfo (tl e.(renaming)) info_new info_source e.(kn)
-.
-
 (**************************************)
 
 
 
 
+(* Print ssrfun.Option.bind. *)
+(* Print ssrfun.Option.map. *)
 
 
 
@@ -311,19 +278,6 @@ Definition rels_of (na:string) (e:infolocal) :=
 Definition rel_of (na:string) (e:infolocal) :=
   let n := lookup_item e.(info) na in
   tRel n.
-
-
-(*used for generating tCase term, the preturn
-  this function returns a (list term) which represents the pcontext *)
-Definition get_pcontext e :=
-  rels_of "pcontext" e.
-
-(*used for generating tCase term, the bbody of branch
-  For each branch of match with,
-    When iterate on the arguments of this branch,
-    this function return the (tRel _) term of the argument that we are visiting*)
-Definition get_arg_current e :=
-  rel_of "arg_current" e.
 
 
 (* In the type definition, (mutual inductive, maybe n different inductive bodies)
@@ -424,7 +378,7 @@ Section term_generation.
     bind na (t1) (t2 e').
 
   Definition kptLetIn (saveinfo:saveinfo) e t00 na (t0:term) (t1:term) (t2:infolocal -> term) :=
-    let e' := update_kp_withbody na e saveinfo (t00) in
+    let e' := update_kp_withbody na e saveinfo (Some t00) in
     tLetIn na t0 t1 (t2 e').
 
 
@@ -446,7 +400,7 @@ Section term_generation.
         | Some t0 =>
             Ffix ctx' e (
               fun e =>
-                kptLetIn NoSave (*todo*)e t0 decl.(decl_name)
+                kptLetIn NoSave (*todo*)e (tp e t0) decl.(decl_name)
                   (tp e t0) (tp e decl.(decl_type)) t
             )
         end
@@ -516,9 +470,28 @@ Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
     rarg := rarg
   |}.
 
+
 Definition mktCase (e:infolocal)
   case_info mkpuinst mkpparams mkpcontext mkpreturn tmatched
   (t8:infolocal -> list (context * (infolocal -> term))):term :=
+
+  let add_args (e:infolocal) (ctx: context): infolocal :=
+    let e := fold_right (fun b e =>
+        update_kp_withbody b.(decl_name) e NoSave
+        b.(decl_body)
+      (* no need mapt, decl_body is only for normalise term in the source*)
+      ) e ctx in
+    let renaming := tl e.(renaming) in
+    let info_source := map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (minus_one_index l))
+      | (na, information_nat n) => (na, information_nat (n - 1)) end
+      ) e.(info_source)
+    in
+    let arg := information_nat 0 in
+    mkinfo (renaming) (("arg_current", arg):: e.(info)) info_source e.(kn)
+  in
+
   let pcontext := mkpcontext e in
   let update_pcontext pcontext e :=
     let e := fold_right (fun na e => update_kp na e NoSave) e pcontext in
@@ -540,9 +513,50 @@ Definition mktCase (e:infolocal)
           bbody := t (add_args e c) |})
       (t8 e)).
 
+(*used for generating tCase term, the preturn
+  this function returns a (list term) which represents the pcontext *)
+Definition get_pcontext e :=
+  rels_of "pcontext" e.
+
+Definition get_pcontext_var e :=
+  get_info_last "pcontext" e.
+
+Definition get_pcontext_indices e :=
+  remove_last (get_pcontext e).
+
+Definition get_pcontext_indices_without_tletin (is_tlet:list bool) e :=
+  let l := get_pcontext_indices e in
+  List.concat (map2 (fun a (b:bool) => if b then [] else [a]) l (rev is_tlet)).
+
+
+
+(*used for generating tCase term, the bbody of branch
+  For each branch of match with,
+    When iterate on the arguments of this branch,
+    this function return the (tRel _) term of the argument that we are visiting*)
+Definition get_arg_current e :=
+  rel_of "arg_current" e.
+
+
+
 (*Used only in mktCase, 'match with', to be explained *)
 Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
   (e:infolocal) :=
+  let update_ctr_arg_back (e:infolocal) : infolocal :=
+    let info_new := map (
+      fun x => match x with
+      | (na, information_list l) => x
+      | (na, information_nat n) =>
+          if String.eqb "arg_current" na then (na, information_nat (n + 1))
+          else x end
+    ) e.(info) in
+    let info_source := map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (minus_one_index l))
+      | (na, information_nat n) => x end
+    ) e.(info_source) in
+    mkinfo (tl e.(renaming)) info_new info_source e.(kn)
+  in
   let fix Ffix f l e acc:=
     match l with
     | x :: l => Ffix f l (update_ctr_arg_back e) ((f x e) :: acc)
@@ -572,7 +586,9 @@ Remark: how to choose [mktbind] [kptbind]:
     (Ind1,..., Indm) can not be referenced in the source, so use [mktProd]
 *)
 
+
 (*normalise the term*)
+(*attention: only used to normalise the term in the source *)
 Definition normal e t :option term :=
   let renaming := e.(renaming) in
   let ctx :=

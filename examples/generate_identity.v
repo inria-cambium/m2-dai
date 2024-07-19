@@ -121,7 +121,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
           (fun e => repeat the_name (1 + length indices))
           (fun e =>
             tApp (tInd the_inductive Instance.empty)
-            ((rels_of "params" e ) ++ (remove_last (get_pcontext e))))
+            ((rels_of "params" e ) ++ (get_pcontext_indices e)))
           (fun e => rel_of "x" e)
           (fun e => mapi (aux e) body.(ind_ctors));
 
