@@ -215,12 +215,12 @@ Definition GenerateIndp_proof (kername : kername) (ty :  mutual_inductive_body) 
   let generate_fix e j mainbody : def term :=
     let indices_main := mainbody.(ind_indices) in
     let the_inductive_main := {| inductive_mind := kername; inductive_ind := j|} in
-    let indice_is_tlet :=
-      map (fun t =>
-            match t.(decl_body) with
-            | Some _ => true
-            | None => false end
-          ) indices_main
+    let n_indice_no_body :=
+      fold_left (fun n b =>
+        match b.(decl_body) with
+        | Some _ => n
+        | _ => S n end
+      ) indices_main 0
     in
     mktfixpoint (Savelist "F") (map (fun _ => fix_name) bodies) e
       fix_name
@@ -252,7 +252,7 @@ Definition GenerateIndp_proof (kername : kername) (ty :  mutual_inductive_body) 
           (fun e =>
             tApp (geti_info "P" e j)
               (rels_of "no_uniform_params" e
-                ++ get_pcontext_indices_without_tletin indice_is_tlet e
+                ++ get_pcontext_indices_without_tletin indices_main e
                 ++ [get_pcontext_var e]
               )
           )
@@ -260,7 +260,7 @@ Definition GenerateIndp_proof (kername : kername) (ty :  mutual_inductive_body) 
           (fun e => rel_of "x" e)
           (fun e => mapi (aux' e j) mainbody.(ind_ctors)))
       )
-      (length indices_main + length no_uniform_params)
+      (n_indice_no_body + length no_uniform_params)
   in
 
   it_kptLambda_default (Some "params") initial_info params $
