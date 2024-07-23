@@ -164,7 +164,7 @@ Local Definition lift_renaming t :=
         mkdecl t.(decl_name) t.(decl_body) (lift0 1 t.(decl_type))
   ) t.
 
-Local Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
+Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   let item := mkdeclnat na None 0 in
   let item_rename := mkdecl na None (tRel 0) in
   let renaming :=
@@ -191,7 +191,7 @@ Local Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   end
   .
 
-Local Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:option term) :=
+Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:option term) :=
   let item := mkdeclnat na None 0 in
   let item_rename := mkdecl na (t) (tRel 0) in
   let renaming :=
@@ -604,25 +604,23 @@ Definition normal e t :option term :=
 
 
 
-Definition fold_left_ie {A} (tp:nat -> A -> (infolocal -> term) -> infolocal -> term)
-  (l:list A) (t : infolocal -> term) : infolocal -> term :=
-  let fix aux l n t : infolocal -> term :=
+Definition fold_left_ie {A B} (tp:nat -> A -> (infolocal -> B) -> infolocal -> B)
+  (l:list A) (t : infolocal -> B) : infolocal -> B :=
+  let fix aux l n t : infolocal -> B :=
     match l with
     | [] => t
     | a :: l => aux l (S n) (tp n a t)
   end in
   aux l 0 t.
 
-Definition fold_right_ie {A} (tp:nat -> A -> (infolocal -> term) -> infolocal -> term)
-  (l:list A) (t : infolocal -> term) : infolocal -> term :=
-  let fix aux l n t : infolocal -> term :=
+Definition fold_right_ie {A B} (tp:nat -> A -> (infolocal -> B) -> infolocal -> B)
+  (l:list A) (t : infolocal -> B) : infolocal -> B :=
+  let fix aux l n t : infolocal -> B :=
     match l with
     | [] => t
     | a :: l => tp n a (aux l (S n) t)
   end in
   aux l 0 t.
-
-
 
 
 (*
@@ -656,20 +654,69 @@ Definition check_return_type (t:term) (e:infolocal) : option nat :=
   no need to generate term, use functions below
 *)
 
-Definition update_kp_util {Y:Type} saveinfo na e
-  (t1:infolocal -> Y -> Y) (acc:infolocal -> Y) :Y :=
+Definition update_kp_util {Y:Type} saveinfo na e (acc:infolocal -> Y) :Y :=
   let e' := update_kp na e saveinfo in
-  (t1 e) (acc e').
+  acc e'.
+
+Definition update_kp_letin_util {Y:Type} saveinfo na e def (acc:infolocal -> Y) :Y :=
+  let e' := update_kp_withbody na e saveinfo def in
+  acc e'.
+
+
+(* Definition test_it_update  *)
 
 Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:infolocal)
-  (t0:infolocal -> Y -> Y) (acc: infolocal -> Y) :Y :=
-  let fix Ffix ctx e acc:=
+ (acc: infolocal -> Y) :Y :=
+  let fix Ffix ctx e acc :=
     match ctx with
     | [] => acc e
     | decl :: ctx' =>
         Ffix ctx' e (
           fun e =>
-            update_kp_util saveinfo decl.(decl_name) e t0 acc
+            update_kp_util saveinfo decl.(decl_name) e acc
         )
   end in
   Ffix ctx e acc.
+
+
+
+
+
+
+(* Definition it_kptacc (saveinfo:option string) (e:infolocal) (tp:infolocal -> X -> X) (ctx:context) (t: infolocal -> X) : X :=
+  let saveinfo :=
+    match saveinfo with | None => NoSave | Some str => Savelist str
+  end in
+  let fix Ffix ctx e t:=
+    match ctx with
+    | [] => t e
+    | decl :: ctx' =>
+      match decl.(decl_body) with
+      | None =>
+          Ffix ctx' e (
+            fun e =>
+              kptbind saveinfo e decl.(decl_name)
+                (tp e decl.(decl_type)) t
+          )
+      | Some t0 =>
+          Ffix ctx' e (
+            fun e =>
+              kptLetIn NoSave (*todo*)e t0 decl.(decl_name)
+                (tp e t0) (tp e decl.(decl_type)) t
+          )
+      end
+    end in
+  Ffix ctx e t. *)
+
+
+  (* aux : context_decl -> (infolocal -> X) -> infolocal -> X *)
+
+
+(* Definition check_args {X:Type} saveinfo ctx
+  ( aux : context_decl -> (infolocal -> X) -> infolocal -> X ) 
+  ( init : infolocal -> X): infolocal -> X :=
+  let fix Ffix ctx x :=
+    match ctx with
+    | [] => x
+    | a :: ctx' => Ffix ctx' (aux a x) *)
+
