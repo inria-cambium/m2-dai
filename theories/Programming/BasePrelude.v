@@ -400,7 +400,7 @@ Section term_generation.
         | Some t0 =>
             Ffix ctx' e (
               fun e =>
-                kptLetIn NoSave (*todo*)e (tp e t0) decl.(decl_name)
+                kptLetIn NoSave (*todo*)e t0 decl.(decl_name)
                   (tp e t0) (tp e decl.(decl_type)) t
             )
         end
@@ -524,9 +524,15 @@ Definition get_pcontext_var e :=
 Definition get_pcontext_indices e :=
   remove_last (get_pcontext e).
 
-Definition get_pcontext_indices_without_tletin (is_tlet:list bool) e :=
+Definition get_pcontext_indices_without_tletin (indice:context) e :=
   let l := get_pcontext_indices e in
-  List.concat (map2 (fun a (b:bool) => if b then [] else [a]) l (rev is_tlet)).
+  List.concat
+    (map2
+      (fun a b =>
+        match b.(decl_body) with
+        | Some _ => []
+        | None => [a] end)
+      l (rev indice)).
 
 
 
