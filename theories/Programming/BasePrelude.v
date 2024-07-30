@@ -35,20 +35,38 @@ Inductive information : Type :=
 | information_list (l : list (BasicAst.context_decl nat))
 | information_nat (n : nat).
 
-Definition lookup_list (l : list (string * information)) (na : string) : list (BasicAst.context_decl nat) :=
+
+Inductive Result (A:Type) :=
+  | Ok (a:A)
+  | Error (s:string).
+Arguments Ok {A}.
+Arguments Error {A}.
+
+(* Print String.concat. *)
+(* Print String.append. *)
+
+
+Notation "a +++ b" := (String.append a b) (at level 100, right associativity).
+
+Definition names (l : list (string * information)) : string :=
+  "(" +++ (String.concat ", " (List.map fst l)) +++ ")".
+
+
+Definition lookup_list (l : list (string * information)) (na : string) :
+  Result (list (BasicAst.context_decl nat)) :=
   match find (fun i => match i with
                       | (na', _) => String.eqb na na'
               end) l  with
-    Some (_, information_list l) => l
-  | _ => []
+    Some (_, information_list l) => Ok l
+  | _ => Error (na +++ " is not accessible. All accessible info are " +++ names l)
   end.
 
-Definition lookup_item (l : list (string * information)) (na : string) : nat :=
+Definition lookup_item (l : list (string * information)) (na : string) : Result nat :=
   match find (fun i => match i with
   | (na', _) => String.eqb na na'
   end) l  with
-  Some (_, information_nat n) => n
-  | _ => todo
+  Some (_, information_nat n) => Ok n
+  | _ => Error (na +++ " is not accessible. All accessible info are " +++ names l)
   end.
 
 Local Fixpoint replace_add_info (info:list (string * information)) (na:string) (item : BasicAst.context_decl nat) :=
@@ -235,9 +253,12 @@ Local Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
 
 (*return the [i]th element of the [e.(renaming)].
   Only used in mapt currently*)
-Local Definition geti_rename (e:infolocal) (i:nat) :=
+Local Definition geti_rename (e:infolocal) (i:nat) :Result term :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
-  (nth i l todo).
+  match nth_error l i with
+  | Some t => Ok t
+  | None => Error "sth"
+  end.
 
 (**************************************)
 (**************************************)
@@ -256,28 +277,56 @@ Local Definition geti_rename (e:infolocal) (i:nat) :=
 
 
 
-
 (******************************  API  *******************************)
 
 (*return the tRel term of the [i]th element of the information list named [na] inside [e.(info)] *)
-Definition geti_info (na:string) (e:infolocal) (i:nat) :=
+Definition geti_info (na:string) (e:infolocal) (i:nat) :Result term :=
   let l := lookup_list e.(info) na in
-  tRel (nth i (rev_map decl_type l) todo).
+  match l with
+  | Error msg => Error $ "error: geti_info. " +++ msg
+  | Ok l =>
+    match nth_error (rev_map decl_type l) i with
+    | None => Error $ "error: geti_info. " +++ "The index " +++ (string_of_nat i) +++ "is out of bound."
+    | Some d => Ok $ tRel d
+    end
+  end.
 
 
-Definition get_info_last (na:string) (e:infolocal) :term :=
+Definition get_info_last (na:string) (e:infolocal) :Result term :=
   let l := lookup_list e.(info) na in
-  tRel (hd todo l).(decl_type).
+  match l with
+  | Error msg => Error $ "error: get_info_last. " +++ msg
+  | Ok l =>
+    match l with
+    | [] => Error $ "error: get_info_last. " +++ "the information_list " +++ na +++ " is empty."
+    | x :: _ => Ok $ tRel (decl_type x)
+    end
+  end.
+
 
 (*return the reversal tRel term list of the information list named [na] of [e]*)
-Definition rels_of (na:string) (e:infolocal) :=
+Definition rels_of' (na:string) (e:infolocal) :Result (list term) :=
   let l := lookup_list e.(info) na in
-  rev_map (fun x => tRel x.(decl_type)) l.
+  match l with
+  | Error msg => Error $ "error: rels_of. " +++ msg
+  | Ok l => Ok $ rev_map (fun x => tRel x.(decl_type)) l
+  end.
+
+Definition rels_of (na:string) (e:infolocal) : list (Result term) :=
+  let l := lookup_list e.(info) na in
+  match l with
+  | Error msg => [Error $ "error: rels_of. " +++ msg]
+  | Ok l => rev_map (fun x => Ok $ tRel x.(decl_type)) l
+  end.
+
 
 (*return the tRel term of the informationitem named [na] of [e]*)
-Definition rel_of (na:string) (e:infolocal) :=
+Definition rel_of (na:string) (e:infolocal) : Result term :=
   let n := lookup_item e.(info) na in
-  tRel n.
+  match n with
+  | Error msg => Error $ "error: rel_of. " +++ msg
+  | Ok n => Ok $ tRel n
+  end.
 
 
 (* In the type definition, (mutual inductive, maybe n different inductive bodies)
@@ -292,33 +341,152 @@ Definition rel_of (na:string) (e:infolocal) :=
 
     when we use the function below to check this `nforest`, it should return `Some 0`.
 *)
-Definition is_rec_call (e:infolocal) i : option nat:=
-  let l := rev_map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
-  let fix Ffix l j :=
-    match l with
-    | k :: l0 => if eqb k i then Some j else Ffix l0 (j+1)
-      (* if ltb i k then None *)
-    | [] => None
-  end in
-  Ffix l 0.
+Definition is_rec_call (e:infolocal) i : Result (option nat):=
+  let l := lookup_list e.(info_source) "rels_of_T" in
+  match l with
+  | Error msg => Error $ "error: is_rec_call. " +++ msg
+  | Ok l =>
+    let l := rev_map decl_type l in
+    let fix Ffix l j :=
+      match l with
+      | k :: l0 => if eqb k i then Some j else Ffix l0 (j+1)
+        (* if ltb i k then None *)
+      | [] => None
+    end in
+    Ok $ Ffix l 0
+  end.
+
+
+
+
+Definition getlist {A} : list (Result A) -> Result (list A) :=
+  fun l =>
+    fold_right (fun b a =>
+      match a with
+      | Error msg => Error msg
+      | Ok l =>
+        match b with
+        | Error msg => Error msg
+        | Ok t => Ok (t :: l) end
+      end
+    ) (Ok []) l.
+
+
+(* Definition add_emp_info *)
+
+(* Definition tolist {A} : Result (list A) -> list (Result A) := *)
+
+(* Definition result_list_append {A} : Result (list A) -> Result (list A) -> Result (list A) :=
+  fun l1 l2 =>
+    match l1 with
+    | Error msg => Error msg
+    | Ok l1 =>
+      match l2 with
+      | Error msg => Error msg
+      | Ok l2 => Ok $ l1 ++ l2 end end. *)
+
+(* Notation "a ++* b" := (result_list_append a b) (at level 100, right associativity). *)
+
+
+
+
+Section ctr_new.
+
+Definition tEvar' : nat -> list (Result term) -> Result term :=
+  fun m l =>
+    match getlist l with
+    | Ok l => Ok $ tEvar m l
+    | Error msg => Error msg end.
+
+Definition tCast' : Result term -> cast_kind -> Result term -> Result term :=
+  fun t1 ck t2 =>
+    match t1, t2 with
+    | Ok t1, Ok t2 => Ok $ tCast t1 ck t2
+    | Error msg, _
+    | _, Error msg => Error msg
+    end.
+
+Definition tProd' : aname -> Result term -> Result term -> Result term :=
+  fun na t1 t2 =>
+    match t1, t2 with
+    | Ok t1, Ok t2 => Ok $ tProd na t1 t2
+    | Error msg, _
+    | _, Error msg => Error msg
+    end.
+
+Definition tLambda' : aname -> Result term -> Result term -> Result term :=
+  fun na t1 t2 =>
+    match t1, t2 with
+    | Ok t1, Ok t2 => Ok $ tLambda na t1 t2
+    | Error msg, _
+    | _, Error msg => Error msg
+    end.
+
+Definition tLetIn' : aname -> Result term -> Result term -> Result term -> Result term :=
+  fun na def def_ty body =>
+    match def, def_ty, body with
+    | Ok t1, Ok t2, Ok t3 => Ok $ tLetIn na t1 t2 t3
+    | Error msg, _, _
+    | _, Error msg, _
+    | _, _, Error msg => Error msg
+    end.
+
+Definition tApp' : Result term -> list (Result term) -> Result term :=
+  fun t1 tl =>
+    match t1 with
+    | Error msg => Error msg
+    | Ok t =>
+      match getlist tl with
+      | Error msg => Error msg
+      | Ok l => Ok $ tApp t l end
+    end.
+
+(* Definition tApp'' : Result term -> Result (list term) -> Result term :=
+  fun t tl =>
+    match t with
+    | Error msg => Error msg
+    | Ok t =>
+      match tl with
+      | Error msg => Error msg
+      | Ok l => Ok $ tApp t l
+      end
+    end. *)
+
+Definition tProj' : projection -> Result term -> Result term :=
+  fun pj t =>
+    match t with
+    | Error msg => Error msg
+    | Ok t => Ok $ tProj pj t end.
+
+Definition tArray' : Level.t -> list (Result term) -> Result term -> Result term -> Result term :=
+  fun level arr t1 t2 =>
+    match getlist arr with
+    | Error msg => Error msg
+    | Ok arr =>
+      match t1, t2 with
+      | Ok t1, Ok t2 => Ok $ tArray level arr t1 t2
+      | Error msg, _
+      | _, Error msg => Error msg
+      end
+    end.
+
 
 (* Transform the `type term` in the source
           to the `type term` in the target
 *)
-Definition mapt (e:infolocal) (t:term) : term:=
-  let n_ind := length (lookup_list e.(info_source) "rels_of_T") in
+Definition mapt (e:infolocal) (t:term) : Result term:=
   let fix Ffix e t :=
     match t with
     | tRel k => geti_rename e k
-    | tEvar m tl => tEvar m (map (Ffix e) tl)
-    | tCast t1 ck t2 => tCast (Ffix e t1) ck (Ffix e t2)
-    | tProd na t1 t2 => tProd na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
-    | tLambda na t1 t2 => tLambda na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
-    | tLetIn na t0 t1 t2 => tLetIn na (Ffix e t0) (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
-    | tApp tx tl => tApp (Ffix e tx) (map (Ffix e) tl)
-    | tProj pj t => tProj pj (Ffix e t)
-    | tArray l arr t1 t2 => tArray l (map (Ffix e) arr) (Ffix e t1) (Ffix e t2)
-    | tCase ci p t0 bs =>
+    | tEvar m tl => tEvar' m (map (Ffix e) tl)
+    | tCast t1 ck t2 => tCast' (Ffix e t1) ck (Ffix e t2)
+    | tProd na t1 t2 => tProd' na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
+    | tLambda na t1 t2 => tLambda' na (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
+    | tLetIn na t0 t1 t2 => tLetIn' na (Ffix e t0) (Ffix e t1) (Ffix (update_kp na e NoSave) t2)
+    | tApp tx tl => tApp' (Ffix e tx) (map (Ffix e) tl)
+    | tProj pj t => tProj' pj (Ffix e t)
+    | tArray l arr t1 t2 => tArray' l (map (Ffix e) arr) (Ffix e t1) (Ffix e t2)
+   (*  | tCase ci p t0 bs =>
         tCase ci
           (mk_predicate
             p.(puinst) (map (Ffix e) p.(pparams)) p.(pcontext)
@@ -351,16 +519,33 @@ Definition mapt (e:infolocal) (t:term) : term:=
                     (Ffix e def.(dtype))
                     (Ffix e' def.(dbody))
                     def.(rarg))
-            mfix) n
+            mfix) n *)
     | tVar _ | tSort _ | tConst _ _
-    | tInd _ _ | tConstruct _ _ _ | tInt _ | tFloat _ => t
+    | tInd _ _ | tConstruct _ _ _ | tInt _ | tFloat _ | _  => Ok t
   end in
-  Ffix e t.
+  Ffix e t
+  .
 
+End ctr_new.
+
+
+Definition add_emp_info na e :infolocal :=
+    add_listinfo e na [].
+
+
+(* Context (mapt : infolocal -> term -> term). *)
 
 Section term_generation.
 
   Context (bind: aname -> term -> term -> term).
+
+  Definition bind' : aname -> Result term -> Result term -> Result term :=
+    fun na t1 t2 =>
+      match t1, t2 with
+      | Ok t1, Ok t2 => Ok $ bind na t1 t2
+      | Error msg, _
+      | _, Error msg => Error msg
+      end.
 
   (* make a Prod/Lambda term *)
   (* [saveinfo]: if save the information of new variable into e
@@ -369,20 +554,23 @@ Section term_generation.
     [t1]:       the type of new variable
     [t2]:       the term (need to be fed with infolocal)
   *)
-  Definition kptbind (saveinfo:saveinfo) e na (t1:term) (t2:infolocal -> term) :=
+  Definition kptbind (saveinfo:saveinfo) e na (t1:Result term) (t2:infolocal -> Result term) :=
     let e' := update_kp na e saveinfo in
-    bind na (t1) (t2 e').
+    bind' na (t1) (t2 e').
 
-  Definition mktbind (saveinfo:saveinfo) e na (t1:term) (t2:infolocal -> term) :=
+  Definition mktbind (saveinfo:saveinfo) e na (t1:Result term) (t2:infolocal -> Result term) :=
     let e' := update_mk na e saveinfo in
-    bind na (t1) (t2 e').
+    bind' na (t1) (t2 e').
 
-  Definition kptLetIn (saveinfo:saveinfo) e t00 na (t0:term) (t1:term) (t2:infolocal -> term) :=
+  Definition kptLetIn (saveinfo:saveinfo) e t00 na (t0:Result term) (t1:Result term) (t2:infolocal -> Result term) :=
     let e' := update_kp_withbody na e saveinfo (Some t00) in
-    tLetIn na t0 t1 (t2 e').
+    tLetIn' na t0 t1 (t2 e').
 
 
-  Definition it_kptbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> term) (ctx:context) (t: infolocal -> term) : term :=
+  Definition it_kptbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> Result term) (ctx:context) (t: infolocal -> Result term) : Result term :=
+    let e :=
+      match saveinfo with | None => e | Some na => add_emp_info na e end
+    in
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -407,7 +595,10 @@ Section term_generation.
       end in
     Ffix ctx e t.
 
-  Definition it_mktbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> term) (ctx:context) (t: infolocal -> term) : term :=
+  Definition it_mktbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> Result term) (ctx:context) (t: infolocal -> Result term) : Result term :=
+    let e :=
+      match saveinfo with | None => e | Some na => add_emp_info na e end
+    in
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -420,7 +611,7 @@ Section term_generation.
             Ffix ctx' e e0 (fun e e0 =>
               let e' := update_kp decl.(decl_name) e saveinfo in
               let e0 := update_mk decl.(decl_name) e0 saveinfo in
-              bind decl.(decl_name)
+              bind' decl.(decl_name)
                 (tp e decl.(decl_type))
                 (t e' e0)
             )
@@ -428,7 +619,7 @@ Section term_generation.
             Ffix ctx' e e0 (fun e e0 =>
               let e' := update_kp decl.(decl_name) e NoSave (*todo*)in
               let e0 := update_mk decl.(decl_name) e0 NoSave (*todo*)in
-              tLetIn decl.(decl_name) (tp e t0)
+              tLetIn' decl.(decl_name) (tp e t0)
                 (tp e decl.(decl_type)) (t e' e0)
             )
         end
@@ -470,106 +661,115 @@ Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
     rarg := rarg
   |}.
 
+Section MktCase.
+  Definition mktCase (e:infolocal)
+    case_info mkpuinst mkpparams mkpcontext mkpreturn tmatched
+    (t8:infolocal -> list (context * (infolocal -> term))):term :=
 
-Definition mktCase (e:infolocal)
-  case_info mkpuinst mkpparams mkpcontext mkpreturn tmatched
-  (t8:infolocal -> list (context * (infolocal -> term))):term :=
-
-  let add_args (e:infolocal) (ctx: context): infolocal :=
-    let e := fold_right (fun b e =>
-        update_kp_withbody b.(decl_name) e NoSave
-        b.(decl_body)
-      (* no need mapt, decl_body is only for normalise term in the source*)
-      ) e ctx in
-    let renaming := tl e.(renaming) in
-    let info_source := map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (minus_one_index l))
-      | (na, information_nat n) => (na, information_nat (n - 1)) end
-      ) e.(info_source)
+    let add_args (e:infolocal) (ctx: context): infolocal :=
+      let e := fold_right (fun b e =>
+          update_kp_withbody b.(decl_name) e NoSave
+          b.(decl_body)
+        (* no need mapt, decl_body is only for normalise term in the source*)
+        ) e ctx in
+      let renaming := tl e.(renaming) in
+      let info_source := map (
+        fun x => match x with
+        | (na, information_list l) => (na, information_list (minus_one_index l))
+        | (na, information_nat n) => (na, information_nat (n - 1)) end
+        ) e.(info_source)
+      in
+      let arg := information_nat 0 in
+      mkinfo (renaming) (("arg_current", arg):: e.(info)) info_source e.(kn)
     in
-    let arg := information_nat 0 in
-    mkinfo (renaming) (("arg_current", arg):: e.(info)) info_source e.(kn)
-  in
 
-  let pcontext := mkpcontext e in
-  let update_pcontext pcontext e :=
-    let e := fold_right (fun na e => update_kp na e NoSave) e pcontext in
-    let l:= mapi (fun i x => mkdeclnat x None i) (pcontext) in
-    let info_new := ("pcontext", information_list l) :: e.(info) in
-    mkinfo e.(renaming) info_new e.(info_source) e.(kn)
-  in
-  tCase case_info
-    {|
-      puinst := mkpuinst e;
-      pparams := mkpparams e;
-      pcontext := pcontext;
-      preturn := mkpreturn (update_pcontext pcontext e)
-    |}
-    (tmatched e)
-    (map
-      (fun '(c, t) =>
-        {| bcontext := map decl_name c;
-          bbody := t (add_args e c) |})
-      (t8 e)).
+    let pcontext := mkpcontext e in
+    let update_pcontext pcontext e :=
+      let e := fold_right (fun na e => update_kp na e NoSave) e pcontext in
+      let l:= mapi (fun i x => mkdeclnat x None i) (pcontext) in
+      let info_new := ("pcontext", information_list l) :: e.(info) in
+      mkinfo e.(renaming) info_new e.(info_source) e.(kn)
+    in
+    tCase case_info
+      {|
+        puinst := mkpuinst e;
+        pparams := mkpparams e;
+        pcontext := pcontext;
+        preturn := mkpreturn (update_pcontext pcontext e)
+      |}
+      (tmatched e)
+      (map
+        (fun '(c, t) =>
+          {| bcontext := map decl_name c;
+            bbody := t (add_args e c) |})
+        (t8 e)).
 
-(*used for generating tCase term, the preturn
-  this function returns a (list term) which represents the pcontext *)
-Definition get_pcontext e :=
-  rels_of "pcontext" e.
+  (*used for generating tCase term, the preturn
+    this function returns a (list term) which represents the pcontext *)
+  Definition get_pcontext e :=
+    match rels_of' "pcontext" e with
+    | Error msg => Error $ "error: get_pcontext. " +++ msg
+    | Ok t => Ok t end.
 
-Definition get_pcontext_var e :=
-  get_info_last "pcontext" e.
+  Definition get_pcontext_var e :=
+    match get_info_last "pcontext" e with
+    | Error msg => Error $ "error: get_pcontext_var. " +++ msg
+    | Ok t => Ok t end.
 
-Definition get_pcontext_indices e :=
-  remove_last (get_pcontext e).
+  Definition get_pcontext_indices e :=
+    match get_pcontext e with
+    | Error msg => Error $ "error: get_pcontext_indices. " +++ msg
+    | Ok l => Ok $ remove_last l end.
 
-Definition get_pcontext_indices_without_tletin (indice:context) e :=
-  let l := get_pcontext_indices e in
-  List.concat
-    (map2
-      (fun a b =>
-        match b.(decl_body) with
-        | Some _ => []
-        | None => [a] end)
-      l (rev indice)).
+  Definition get_pcontext_indices_without_tletin (indice:context) e :=
+    match get_pcontext_indices e with | Ok l => Ok $
+    List.concat
+      (map2
+        (fun a b =>
+          match b.(decl_body) with
+          | Some _ => []
+          | None => [a] end)
+        l (rev indice))
+    | Error msg => Error msg end
+      .
 
+  (*used for generating tCase term, the bbody of branch
+    For each branch of match with,
+      When iterate on the arguments of this branch,
+      this function return the (tRel _) term of the argument that we are visiting*)
+  Definition get_arg_current e :=
+    match rel_of "arg_current" e with
+    Ok l => Ok l
+    | Error msg => Error $ "error: get_arg_current. " +++ msg end.
 
+  (*Used only in mktCase, 'match with', to be explained *)
+  Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
+    (e:infolocal) :=
+    let update_ctr_arg_back (e:infolocal) : infolocal :=
+      let info_new := map (
+        fun x => match x with
+        | (na, information_list l) => x
+        | (na, information_nat n) =>
+            if String.eqb "arg_current" na then (na, information_nat (n + 1))
+            else x end
+      ) e.(info) in
+      let info_source := map (
+        fun x => match x with
+        | (na, information_list l) => (na, information_list (minus_one_index l))
+        | (na, information_nat n) => x end
+      ) e.(info_source) in
+      mkinfo (tl e.(renaming)) info_new info_source e.(kn)
+    in
+    let fix Ffix f l e acc:=
+      match l with
+      | x :: l => Ffix f l (update_ctr_arg_back e) ((f x e) :: acc)
+      | _ => acc
+      end
+    in
+    Ffix f l e [].
 
-(*used for generating tCase term, the bbody of branch
-  For each branch of match with,
-    When iterate on the arguments of this branch,
-    this function return the (tRel _) term of the argument that we are visiting*)
-Definition get_arg_current e :=
-  rel_of "arg_current" e.
+End MktCase.
 
-
-
-(*Used only in mktCase, 'match with', to be explained *)
-Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
-  (e:infolocal) :=
-  let update_ctr_arg_back (e:infolocal) : infolocal :=
-    let info_new := map (
-      fun x => match x with
-      | (na, information_list l) => x
-      | (na, information_nat n) =>
-          if String.eqb "arg_current" na then (na, information_nat (n + 1))
-          else x end
-    ) e.(info) in
-    let info_source := map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (minus_one_index l))
-      | (na, information_nat n) => x end
-    ) e.(info_source) in
-    mkinfo (tl e.(renaming)) info_new info_source e.(kn)
-  in
-  let fix Ffix f l e acc:=
-    match l with
-    | x :: l => Ffix f l (update_ctr_arg_back e) ((f x e) :: acc)
-    | _ => acc
-    end
-  in
-  Ffix f l e [].
 
 
 (*
@@ -600,7 +800,7 @@ Definition normal e t :option term :=
   let ctx :=
     mapi (fun i t => mkdecl t.(decl_name) t.(decl_body) (tRel i)) renaming
   in
-  reduce_opt RedFlags.default empty_global_env ctx 100 t.
+  reduce_opt RedFlags.default empty_global_env ctx 100 (*todo*) t.
 
 
 
@@ -631,92 +831,54 @@ Definition fold_right_ie {A B} (tp:nat -> A -> (infolocal -> B) -> infolocal -> 
       Acc_intro : (forall y : A, R y x -> Acc R y) -> Acc R x.
       the first argument is a type ends with Acc _ _.
 *)
-Definition check_return_type (t:term) (e:infolocal) : option nat :=
+Definition check_return_type (t:term) (e:infolocal) : Result (option nat) :=
   let fix Ffix t e {struct t}:=
     match t with
     | tRel i =>
-      let types := lookup_list e.(info_source) "rels_of_T" in
-      let types := map decl_type types in
-      findi i types
+      match lookup_list e.(info_source) "rels_of_T" with
+      | Error msg => Error $ "error: check_return_type. " +++ msg
+      | Ok types =>
+        let types := map decl_type types in
+        Ok $ findi i types end
     | tApp t _ => Ffix t e
     | tProd name _  t2 => Ffix t2 (update_kp name e NoSave)
-    | _ => None
+    | _ => Ok $ None
     end in
   Ffix t e.
 
 
+(*******)
+
+(* Print aname.
+
+Print name. *)
+
+(* Definition update_nt (e:infolocal) :infolocal :=
+  let the_name := {| binder_name := nAnon; binder_relevance := Relevant|} in
+  let item_rename := mkdecl the_name None (tRel 0) in
+  let renaming :=
+    item_rename :: (e.(renaming))
+  in
+  let info_source :=
+    map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (plus_one_index l))
+      | (na, information_nat n) => (na, information_nat (1 + n)) end
+    ) e.(info_source)
+  in
+  let info := e.(info) in
+  mkinfo renaming info info_source e.(kn).
+
+Definition next (t:infolocal -> term) : infolocal -> term :=
+  fun e => t (update_nt e). *)
+
+(* Definition  *)
+
+
+(* Print getlist. *)
+
+(* Compute (getlist [Ok 1; Ok 2; Error ""]). *)
 
 
 
-
-(****************************************************************)
-(*If just need to get information from the source
-  no need to generate term, use functions below
-*)
-
-Definition update_kp_util {Y:Type} saveinfo na e (acc:infolocal -> Y) :Y :=
-  let e' := update_kp na e saveinfo in
-  acc e'.
-
-Definition update_kp_letin_util {Y:Type} saveinfo na e def (acc:infolocal -> Y) :Y :=
-  let e' := update_kp_withbody na e saveinfo def in
-  acc e'.
-
-
-(* Definition test_it_update  *)
-
-Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:infolocal)
- (acc: infolocal -> Y) :Y :=
-  let fix Ffix ctx e acc :=
-    match ctx with
-    | [] => acc e
-    | decl :: ctx' =>
-        Ffix ctx' e (
-          fun e =>
-            update_kp_util saveinfo decl.(decl_name) e acc
-        )
-  end in
-  Ffix ctx e acc.
-
-
-
-
-
-
-(* Definition it_kptacc (saveinfo:option string) (e:infolocal) (tp:infolocal -> X -> X) (ctx:context) (t: infolocal -> X) : X :=
-  let saveinfo :=
-    match saveinfo with | None => NoSave | Some str => Savelist str
-  end in
-  let fix Ffix ctx e t:=
-    match ctx with
-    | [] => t e
-    | decl :: ctx' =>
-      match decl.(decl_body) with
-      | None =>
-          Ffix ctx' e (
-            fun e =>
-              kptbind saveinfo e decl.(decl_name)
-                (tp e decl.(decl_type)) t
-          )
-      | Some t0 =>
-          Ffix ctx' e (
-            fun e =>
-              kptLetIn NoSave (*todo*)e t0 decl.(decl_name)
-                (tp e t0) (tp e decl.(decl_type)) t
-          )
-      end
-    end in
-  Ffix ctx e t. *)
-
-
-  (* aux : context_decl -> (infolocal -> X) -> infolocal -> X *)
-
-
-(* Definition check_args {X:Type} saveinfo ctx
-  ( aux : context_decl -> (infolocal -> X) -> infolocal -> X ) 
-  ( init : infolocal -> X): infolocal -> X :=
-  let fix Ffix ctx x :=
-    match ctx with
-    | [] => x
-    | a :: ctx' => Ffix ctx' (aux a x) *)
 

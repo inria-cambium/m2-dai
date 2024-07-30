@@ -38,6 +38,14 @@ MetaCoq Run Derive InductivePrinciple All2 as "indp_all2".
 Print indp_all2.
 
 
+(* Inductive myterm' : Type :=
+  | mylam' : (nat -> myterm') -> myterm'
+  .
+MetaCoq Run Derive InductivePrinciple myterm' as "indp_myterm'".
+Print indp_myterm'. *)
+
+
+(*
 (* le defined with two indices *)
 Inductive le: nat -> nat -> Type :=
 | le_refl n : le n n
@@ -146,3 +154,8 @@ Inductive mynat' :Type :=
   | mys' : let x := mynat' in let y := x in ((fun z => z ) y) -> mynat'.
 MetaCoq Run Derive InductivePrinciple mynat' as "indp_mynat'".
 Print indp_mynat'.
+
+Inductive myterm' (a:Type): Type :=
+| mylam : (a -> let x := a in x -> let y:= x in y -> myterm' a) -> myterm' a.
+MetaCoq Run Derive InductivePrinciple myterm' as "indp_myterm'".
+Print indp_myterm'. *)
