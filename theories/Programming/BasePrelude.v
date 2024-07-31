@@ -42,6 +42,31 @@ Inductive Result (A:Type) :=
 Arguments Ok {A}.
 Arguments Error {A}.
 
+Definition term_err_eq : Result term -> Result term -> bool :=
+  fun a b =>
+    match a, b with
+    | Ok a, Ok b => a == b
+    | _, _ => false
+    end.
+
+Definition Result_bind {A B} : Result A -> (A -> Result B) -> Result B :=
+  fun a f =>
+    match a with
+    | Error msg => Error msg
+    | Ok t => f t
+    end.
+
+Notation "'&let' x ':=' c1 'in' c2" := (@Result_bind _ _ c1 (fun x => c2))
+                                    (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
+
+
+Definition Result_of_list {A} : list (Result A) -> Result (list A) :=
+  fun l =>
+    fold_right (fun b l =>
+      &let l := l in
+      &let b := b in
+      Ok $ b :: l
+    ) (Ok []) l.
 (* Print String.concat. *)
 (* Print String.append. *)
 
@@ -257,7 +282,7 @@ Local Definition geti_rename (e:infolocal) (i:nat) :Result term :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
   match nth_error l i with
   | Some t => Ok t
-  | None => Error "sth"
+  | None => Error "error: geti_rename, index out of bound."
   end.
 
 (**************************************)
@@ -359,17 +384,6 @@ Definition is_rec_call (e:infolocal) i : Result (option nat):=
 
 
 
-Definition getlist {A} : list (Result A) -> Result (list A) :=
-  fun l =>
-    fold_right (fun b a =>
-      match a with
-      | Error msg => Error msg
-      | Ok l =>
-        match b with
-        | Error msg => Error msg
-        | Ok t => Ok (t :: l) end
-      end
-    ) (Ok []) l.
 
 
 (* Definition add_emp_info *)
@@ -394,82 +408,96 @@ Section ctr_new.
 
 Definition tEvar' : nat -> list (Result term) -> Result term :=
   fun m l =>
-    match getlist l with
-    | Ok l => Ok $ tEvar m l
-    | Error msg => Error msg end.
+    &let l := Result_of_list l in
+    Ok $ tEvar m l.
 
 Definition tCast' : Result term -> cast_kind -> Result term -> Result term :=
   fun t1 ck t2 =>
-    match t1, t2 with
-    | Ok t1, Ok t2 => Ok $ tCast t1 ck t2
-    | Error msg, _
-    | _, Error msg => Error msg
-    end.
+    &let t1 := t1 in
+    &let t2 := t2 in
+    Ok $ tCast t1 ck t1.
 
 Definition tProd' : aname -> Result term -> Result term -> Result term :=
   fun na t1 t2 =>
-    match t1, t2 with
-    | Ok t1, Ok t2 => Ok $ tProd na t1 t2
-    | Error msg, _
-    | _, Error msg => Error msg
-    end.
+    &let t1 := t1 in
+    &let t2 := t2 in
+    Ok $ tProd na t1 t2.
 
 Definition tLambda' : aname -> Result term -> Result term -> Result term :=
   fun na t1 t2 =>
-    match t1, t2 with
-    | Ok t1, Ok t2 => Ok $ tLambda na t1 t2
-    | Error msg, _
-    | _, Error msg => Error msg
-    end.
+    &let t1 := t1 in
+    &let t2 := t2 in
+    Ok $ tLambda na t1 t2.
 
 Definition tLetIn' : aname -> Result term -> Result term -> Result term -> Result term :=
   fun na def def_ty body =>
-    match def, def_ty, body with
-    | Ok t1, Ok t2, Ok t3 => Ok $ tLetIn na t1 t2 t3
-    | Error msg, _, _
-    | _, Error msg, _
-    | _, _, Error msg => Error msg
-    end.
+    &let t1 := def in
+    &let t2 := def_ty in
+    &let t3 := body in
+    Ok $ tLetIn na t1 t2 t3.
 
 Definition tApp' : Result term -> list (Result term) -> Result term :=
   fun t1 tl =>
-    match t1 with
-    | Error msg => Error msg
-    | Ok t =>
-      match getlist tl with
-      | Error msg => Error msg
-      | Ok l => Ok $ tApp t l end
-    end.
-
-(* Definition tApp'' : Result term -> Result (list term) -> Result term :=
-  fun t tl =>
-    match t with
-    | Error msg => Error msg
-    | Ok t =>
-      match tl with
-      | Error msg => Error msg
-      | Ok l => Ok $ tApp t l
-      end
-    end. *)
+    &let t1 := t1 in
+    &let l := Result_of_list tl in
+    Ok $ tApp t1 l.
 
 Definition tProj' : projection -> Result term -> Result term :=
   fun pj t =>
-    match t with
-    | Error msg => Error msg
-    | Ok t => Ok $ tProj pj t end.
+    &let t := t in
+    Ok $ tProj pj t.
 
 Definition tArray' : Level.t -> list (Result term) -> Result term -> Result term -> Result term :=
   fun level arr t1 t2 =>
-    match getlist arr with
-    | Error msg => Error msg
-    | Ok arr =>
-      match t1, t2 with
-      | Ok t1, Ok t2 => Ok $ tArray level arr t1 t2
-      | Error msg, _
-      | _, Error msg => Error msg
-      end
-    end.
+    &let arr :=  Result_of_list arr in
+    &let t1 := t1 in
+    &let t2 := t2 in
+    Ok $ tArray level arr t1 t2.
 
+Definition tCase' :
+  case_info -> predicate (Result term) -> Result term ->
+  list (branch (Result term)) -> Result term :=
+  fun ci type_info discr branches =>
+    let getbranch {A} : list (branch (Result A)) -> Result (list (branch A)) :=
+      fun l =>
+        fold_right (fun b l =>
+          &let l := l in
+          let bc := bcontext b in
+          &let bb := bbody b in
+          Ok (mk_branch bc bb :: l)
+        ) (Ok []) l
+    in
+    let pu := type_info.(puinst) in
+    let pp := type_info.(pparams) in
+    let pc := type_info.(pcontext) in
+    let pr := type_info.(preturn) in
+    &let pp := Result_of_list pp in
+    &let pr := pr in
+    let type_info' := mk_predicate pu pp pc pr in
+    &let discr := discr in
+    &let branches' := getbranch branches in
+    Ok $ tCase ci type_info' discr branches'.
+
+Definition getdef {A}: list (def (Result A)) -> Result (list (def A)) :=
+  fun l =>
+    fold_right (fun b l =>
+      &let l := l in
+      let dn := dname b in
+      &let dt := dtype b in
+      &let db := dbody b in
+      let rarg := rarg b in
+      Ok (mkdef A dn dt db rarg :: l)
+    ) (Ok []) l.
+
+Definition tFix' : mfixpoint (Result term) -> nat -> Result term :=
+  fun mfix n =>
+    &let mfix := getdef mfix in
+    Ok $ tFix mfix n.
+
+Definition tCoFix' : mfixpoint (Result term) -> nat -> Result term :=
+  fun mfix n =>
+    &let mfix := getdef mfix in
+    Ok $ tCoFix mfix n.
 
 (* Transform the `type term` in the source
           to the `type term` in the target
@@ -486,42 +514,42 @@ Definition mapt (e:infolocal) (t:term) : Result term:=
     | tApp tx tl => tApp' (Ffix e tx) (map (Ffix e) tl)
     | tProj pj t => tProj' pj (Ffix e t)
     | tArray l arr t1 t2 => tArray' l (map (Ffix e) arr) (Ffix e t1) (Ffix e t2)
-   (*  | tCase ci p t0 bs =>
-        tCase ci
-          (mk_predicate
-            p.(puinst) (map (Ffix e) p.(pparams)) p.(pcontext)
-            (Ffix (fold_right (fun na e => update_kp na e NoSave) e p.(pcontext)) p.(preturn))
-            )
-          (Ffix e t0)
-          (map (fun b => mk_branch b.(bcontext)
-            (Ffix (fold_right (fun na e => update_kp na e NoSave) e b.(bcontext)) b.(bbody)) ) bs)
+    | tCase ci p t0 bs =>
+      tCase' ci
+        (mk_predicate
+          p.(puinst) (map (Ffix e) p.(pparams)) p.(pcontext)
+          (Ffix (fold_right (fun na e => update_kp na e NoSave) e p.(pcontext)) p.(preturn))
+          )
+        (Ffix e t0)
+        (map (fun b => mk_branch b.(bcontext)
+          (Ffix (fold_right (fun na e => update_kp na e NoSave) e b.(bcontext)) b.(bbody)) ) bs)
     | tFix mfix n =>
-        let e' :=
-          fold_left (fun e def => update_kp def.(dname) e NoSave) mfix e
-        in
-        tFix
-          (map
-              (fun def =>
-                  mkdef _
-                    def.(dname)
-                    (Ffix e def.(dtype))
-                    (Ffix e' def.(dbody))
-                    def.(rarg))
-            mfix) n
+      let e' :=
+        fold_left (fun e def => update_kp def.(dname) e NoSave) mfix e
+      in
+      tFix'
+        (map
+            (fun def =>
+                mkdef _
+                  def.(dname)
+                  (Ffix e def.(dtype))
+                  (Ffix e' def.(dbody))
+                  def.(rarg))
+          mfix) n
     | tCoFix mfix n =>
-        let e' :=
-          fold_left (fun e def => update_kp def.(dname) e NoSave) mfix e
-        in
-        tCoFix
-          (map (fun def =>
-                  mkdef _
-                    def.(dname)
-                    (Ffix e def.(dtype))
-                    (Ffix e' def.(dbody))
-                    def.(rarg))
-            mfix) n *)
+      let e' :=
+        fold_left (fun e def => update_kp def.(dname) e NoSave) mfix e
+      in
+      tCoFix'
+        (map (fun def =>
+                mkdef _
+                  def.(dname)
+                  (Ffix e def.(dtype))
+                  (Ffix e' def.(dbody))
+                  def.(rarg))
+          mfix) n
     | tVar _ | tSort _ | tConst _ _
-    | tInd _ _ | tConstruct _ _ _ | tInt _ | tFloat _ | _  => Ok t
+    | tInd _ _ | tConstruct _ _ _ | tInt _ | tFloat _  => Ok t
   end in
   Ffix e t
   .
@@ -875,9 +903,9 @@ Definition next (t:infolocal -> term) : infolocal -> term :=
 (* Definition  *)
 
 
-(* Print getlist. *)
+(* Print Result_of_list. *)
 
-(* Compute (getlist [Ok 1; Ok 2; Error ""]). *)
+(* Compute (Result_of_list [Ok 1; Ok 2; Error ""]). *)
 
 
 
