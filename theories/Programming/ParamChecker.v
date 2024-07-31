@@ -83,17 +83,18 @@ Definition CheckUniformParam (kn:kername) (ty:mutual_inductive_body) : list bool
           aux t2 bl (update_kp na e NoSave )
       | tApp (tRel i) tl =>
         match is_rec_call e i with
-        | Some _ =>
+        | Ok (Some _) =>
             and_listbool bl
               (mapi (
                 fun i t =>
                   match t with
                   |  (tRel k) =>
-                      if tRel k == (geti_info "params" e i)
+                      if term_err_eq (Ok $ tRel k) (geti_info "params" e i)
                       then true else false
                   | _ => false end
                 ) (firstn npars tl))
-        | None => fold_left (fun bl b => aux b bl e) tl bl
+        | Ok None => fold_left (fun bl b => aux b bl e) tl bl
+        | Error _ => todo
         end
       | tApp t tl =>
         fold_left (fun bl b => aux b bl e) (t::tl) bl

@@ -2,6 +2,7 @@
 
 theories/MetaCoqPrelude.v
 theories/Programming/BasePrelude.v
+theories/Programming/ParamChecker.v
 theories/Programming.v
 
 -Q examples ""

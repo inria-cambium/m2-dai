@@ -22,6 +22,9 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
   (*make up the initial information, which has the information of the type name*)
   let initial_info :=  make_initial_info na ty in
   (* suppose single inductive body*)
+  (* match hd_error ty.(ind_bodies) with
+  | None => Error "0 inductive bodies"
+  | Some body => *)
   let body := hd todo ty.(ind_bodies) in
   let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
   let indices := body.(ind_indices) in
@@ -37,7 +40,8 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
     let auxctr (i:nat) (ctr:constructor_body) (e:infolocal) : Result term :=
       let constructor_current := tConstruct the_inductive i [] in
       let cstr_type := ctr.(cstr_type) in
-      let e := add_emp_info "args" e in
+      (** trick **) let e := add_emp_info "args" e in
+
       (*transforme the return type of constructor*)
       (*'cons : ... -> vec A (S n)'   ~~~>   P (S n) (cons A a n v)
                         ^^^^^^^^^^                                *)
@@ -98,8 +102,8 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
           | Error msg => Error msg
           end
         (**********************)
-        | tProd na _ _ => todo
-          (* match check_return_type t1 e with
+        | tProd na _ _ =>
+          match check_return_type t1 e with
           | Error msg => Error msg
           | Ok None => kptProd (Savelist "args") e na (mapt e t1) t
           | Ok (Some _) =>
@@ -108,29 +112,29 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
               | tProd na ta tb =>
                 kptProd (Savelist "arglambda") e na
                   (mapt e ta) (fun e => aux_nested e tb)
-              | tRel _ =>
+              | tRel i =>
                 match is_rec_call e i with
                 | Error msg => Error msg
-                | Ok None => todo
+                | Ok None => Error "?0"
                 | Ok (Some _) =>
                   tApp' (rel_of "P" e)
                     [tApp' (get_info_last "args" e) (rels_of "arglambda" e)]
                 end
-              | tApp (tRel _) tl =>
+              | tApp (tRel i) tl =>
                 match is_rec_call e i with
                 | Error msg => Error msg
-                | Ok None => todo
+                | Ok None => Error "?1"
                 | Ok (Some _) =>
                   tApp' (rel_of "P" e)
                     (let tl := n_tl tl (length params) in
                       (map (mapt e) tl) ++
                       [tApp' (get_info_last "args" e) (rels_of "arglambda" e)])
                 end
-              | _ => todo
+              | _ => Error "todo"
               end in
             e <- mktProd (Savelist "args") e na (mapt e t1);;
             kptProd NoSave e the_name (aux_nested e t1) t
-          end *)
+          end
         (**********************)
         | _ => kptProd (Savelist "args") e na
                 (mapt e t1)
@@ -191,73 +195,76 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
 
 (****************************************************************)
 (*for mutual inductive type*)
-(* Axiom print_context: forall {A}, infolocal -> A.
+(* Axiom print_context: forall {A}, infolocal -> A. *)
 
-Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body) (n:nat): term :=
+Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body) (n:nat): Result term :=
   let params := ty.(ind_params) in
   let initial_info := make_initial_info kername ty in
   let bodies := ty.(ind_bodies) in
   let n_ind := length ty.(ind_bodies) in
   let (params, no_uniform_params) := SeperateParams kername ty in
 
-  let aux (e:infolocal) (b:list constructor_body) (j:nat) (t:infolocal -> term) :term :=
-    let auxctr (i:nat) (ctr:constructor_body) (e:infolocal): term :=
+  let aux (e:infolocal) (b:list constructor_body) (j:nat) (t:infolocal -> Result term) :Result term :=
+    let auxctr (i:nat) (ctr:constructor_body) (e:infolocal): Result term :=
       let constructor_current :=
         tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
-      let transformer_result :infolocal -> term := fun e =>
-        tApp (geti_info "P" e j)
+      (** trick **) let e := add_emp_info "args" e in
+      let transformer_result :infolocal -> Result term := fun e =>
+        tApp' (geti_info "P" e j)
           (
             rels_of "no_uniform_params" e
             ++
             (map (mapt e) ctr.(cstr_indices))
             ++
-            [tApp constructor_current
+            [tApp' (Ok constructor_current)
               (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
           )
       in
-      let auxarg arg (t:infolocal->term) :infolocal -> term := fun e =>
+      let auxarg arg (t:infolocal-> Result term) :infolocal -> Result term := fun e =>
         let t1 := arg.(decl_type) in
         let na := arg.(decl_name) in
         match arg.(decl_body) with
         | Some t0 => kptLetIn NoSave e t0 na (mapt e t0) (mapt e t1) t
         | None =>
           match normal e t1 with
-          | None => print_context e
+          | None => Error "term not normalisable"
           | Some t1 =>
             match t1 with
             | tRel i =>
               match is_rec_call e i with
-              | Some kk =>
+              | Ok (Some kk) =>
                 e <- mktProd (Savelist "args") e na (mapt e t1);;
-                mktProd NoSave e the_name
+                kptProd NoSave e the_name
                   (
-                    tApp (geti_info "P" e kk) (*tRel 0*)[get_info_last "args" e])
-                  (next t)
-              | None =>
-                mktProd (Savelist "args") e na
+                    tApp' (geti_info "P" e kk) [get_info_last "args" e])
+                  ( t)
+              | Ok None =>
+                kptProd (Savelist "args") e na
                   (mapt e t1)
-                  (next t)
+                  ( t)
+              | Error msg => Error msg
               end
             | tApp (tRel i) tl =>
               match is_rec_call e i with
-              | Some kk =>
+              | Ok (Some kk) =>
                 e <- mktProd (Savelist "args") e na (mapt e t1);;
-                mktProd NoSave e the_name
-                  (tApp
+                kptProd NoSave e the_name
+                  (tApp'
                     (geti_info "P" e kk)
                     (let tl := n_tl tl (length params) in
                       (map (mapt e) tl) ++ [(get_info_last "args" e)])
-                  ) (next t)
-              | None =>
-                mktProd (Savelist "args") e na
+                  ) ( t)
+              | Ok None =>
+                kptProd (Savelist "args") e na
                   (mapt e t1)
-                  (next t)
+                  ( t)
+              | Error msg => Error msg
               end
             (*****************************************)
             | tProd na _ _ =>
               match check_return_type t1 e with
-              | None => mktProd (Savelist "args") e na ( mapt e t1) (next t)
-              | Some _ =>
+              | Ok None => kptProd (Savelist "args") e na ( mapt e t1) ( t)
+              | Ok (Some _) =>
                 let fix aux_nested e t1 :=
                   match t1 with
                   | tProd na ta tb =>
@@ -265,28 +272,31 @@ Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body
                       (mapt e ta) (fun e => aux_nested e tb)
                   | tRel i =>
                     match is_rec_call e i with
-                    | None => todo
-                    | Some kk =>
-                      tApp (geti_info "P" e kk)
-                        [tApp (get_info_last "args" e) (rels_of "arglambda" e)]
+                    | Ok None => Error "?"
+                    | Ok (Some kk) =>
+                      tApp' (geti_info "P" e kk)
+                        [tApp' (get_info_last "args" e) (rels_of "arglambda" e)]
+                    | Error msg => Error msg
                     end
                   | tApp (tRel i) tl =>
                     match is_rec_call e i with
-                    | None => todo
-                    | Some kk =>
-                      tApp (geti_info "P" e kk)
+                    | Ok None => Error "?"
+                    | Ok (Some kk) =>
+                      tApp' (geti_info "P" e kk)
                         (let tl := n_tl tl (length params) in
                           (map (mapt e) tl) ++
-                          [tApp (get_info_last "args" e) (rels_of "arglambda" e)])
+                          [tApp' (get_info_last "args" e) (rels_of "arglambda" e)])
+                    | Error msg => Error msg
                     end
-                  | _ => todo end in
+                  | _ => Error "todo" end in
                 e <- mktProd (Savelist "args") e na (mapt e t1);;
-                mktProd NoSave e the_name (aux_nested e t1) (next t)
+                kptProd NoSave e the_name (aux_nested e t1) ( t)
+              | Error msg => Error msg
               end
             (*****************************************)
-            | _ => mktProd (Savelist "args") e na
+            | _ => kptProd (Savelist "args") e na
                     (mapt e t1)
-                    (next t)
+                    ( t)
             end
           end
         end
@@ -313,10 +323,10 @@ Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body
           (
           e <- it_kptProd_default (Some "no_uniform_params") e (no_uniform_params);;
           e <- it_mktProd_default (Some "indices") e (indices);;
-          tProd the_name
-            (tApp (tInd the_inductive [])
+          tProd' the_name
+            (tApp' (Ok $ tInd the_inductive [])
               (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
-            (tSort sProp)
+            (Ok $ tSort sProp)
           ) t
     ) bodies
       (fold_right_ie
@@ -326,15 +336,15 @@ Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body
           e <- it_kptProd_default (Some "no_uniform_params") e (no_uniform_params);;
           e <- it_mktProd_default (Some "indices") e (indices_main);;
           e <- mktProd (Saveitem "x") e the_name
-                (tApp (tInd the_inductive_main [])
+                (tApp' (Ok $ tInd the_inductive_main [])
                   (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e));;
-          tApp (geti_info "P" e 0)
+          tApp' (geti_info "P" e 0)
               (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e]))
       )
   .
 
 Definition GenerateIndp_mutual kn ty := GenerateIndp_mutual' kn ty 0.
-*)
+
 Definition kn_myProjT2 :=
   (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], "my_projT2").
 
@@ -344,7 +354,7 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
     | (tInd ind u) =>
       let kn := ind.(inductive_mind) in
       $let mind := tmQuoteInductive kn in
-      let id := GenerateIndp kn mind in
+      let id := GenerateIndp_mutual kn mind in
       match id with
       | Ok id =>
         $let u := tmUnquote id in
@@ -371,16 +381,11 @@ Definition print_indp {A} (a : A) : TemplateMonad unit :=
     | (tInd ind u) =>
         let kn := ind.(inductive_mind) in
         $let mind := tmQuoteInductive kn in
-          let id := GenerateIndp kn mind in
+          let id := GenerateIndp_mutual kn mind in
           tmEval cbv id >>= tmPrint
     | _ => tmFail "no inductive"
     end.
 
 Notation "'PrintInductivePrinciple' a" := (print_indp a) (at level 0).
-
-
-(* MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
-Print indp_nat. *)
-
 
 

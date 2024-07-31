@@ -38,11 +38,11 @@ MetaCoq Run Derive InductivePrinciple All2 as "indp_all2".
 Print indp_all2.
 
 
-(* Inductive myterm' : Type :=
+Inductive myterm' : Type :=
   | mylam' : (nat -> myterm') -> myterm'
   .
 MetaCoq Run Derive InductivePrinciple myterm' as "indp_myterm'".
-Print indp_myterm'. *)
+Print indp_myterm'.
 
 
 (*
