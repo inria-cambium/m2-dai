@@ -8,3 +8,9 @@ theories/Programming.v
 -Q examples ""
 examples/generate_inductive_principle.v
 examples/test_inductive_principle.v
+
+examples/generate_identity.v
+examples/test_identity.v
+
+examples/generate_indp_proof.v
+examples/test_indp_proof.v

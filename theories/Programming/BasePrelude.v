@@ -56,8 +56,20 @@ Definition Result_bind {A B} : Result A -> (A -> Result B) -> Result B :=
     | Ok t => f t
     end.
 
+Definition option_result_bind {A B} : option A -> string -> (A -> Result B) -> Result B :=
+  fun a str f =>
+    match a with
+    | None => Error str
+    | Some a => f a
+    end.
+
 Notation "'&let' x ':=' c1 'in' c2" := (@Result_bind _ _ c1 (fun x => c2))
                                     (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
+
+Notation "'#let' x ':=' c1 'in' c2" := (@option_result_bind _ _ (fst c1) (snd c1) (fun x => c2))
+                                    (at level 100, c1 at next level, right associativity, x pattern) : monad_scope.
+
+
 
 
 Definition Result_of_list {A} : list (Result A) -> Result (list A) :=
@@ -678,7 +690,7 @@ Definition it_mktLambda_default := it_mktbind_default tLambda.
 
 
 Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
-  (dn:aname) (dt:term) (db:infolocal -> term) (rarg:nat) :def term :=
+  (dn:aname) (dt:Result term) (db:infolocal -> Result term) (rarg:nat) :def (Result term) :=
   let e' :=
     fold_left (fun e na => update_mk na e saveinfo) names e
   in
@@ -692,7 +704,7 @@ Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
 Section MktCase.
   Definition mktCase (e:infolocal)
     case_info mkpuinst mkpparams mkpcontext mkpreturn tmatched
-    (t8:infolocal -> list (context * (infolocal -> term))):term :=
+    (t8:infolocal -> list (context * (infolocal -> Result term))): Result term :=
 
     let add_args (e:infolocal) (ctx: context): infolocal :=
       let e := fold_right (fun b e =>
@@ -718,7 +730,7 @@ Section MktCase.
       let info_new := ("pcontext", information_list l) :: e.(info) in
       mkinfo e.(renaming) info_new e.(info_source) e.(kn)
     in
-    tCase case_info
+    tCase' case_info
       {|
         puinst := mkpuinst e;
         pparams := mkpparams e;
@@ -734,23 +746,26 @@ Section MktCase.
 
   (*used for generating tCase term, the preturn
     this function returns a (list term) which represents the pcontext *)
-  Definition get_pcontext e :=
-    match rels_of' "pcontext" e with
+  (* Definition get_pcontext e :=
+    match rels_of "pcontext" e with
     | Error msg => Error $ "error: get_pcontext. " +++ msg
-    | Ok t => Ok t end.
+    | Ok t => Ok t end. *)
+  Definition get_pcontext e := rels_of "pcontext" e.
 
   Definition get_pcontext_var e :=
     match get_info_last "pcontext" e with
     | Error msg => Error $ "error: get_pcontext_var. " +++ msg
     | Ok t => Ok t end.
 
-  Definition get_pcontext_indices e :=
+  (* Definition get_pcontext_indices e :=
     match get_pcontext e with
     | Error msg => Error $ "error: get_pcontext_indices. " +++ msg
-    | Ok l => Ok $ remove_last l end.
+    | Ok l => Ok $ remove_last l end. *)
+  Definition get_pcontext_indices e :=
+    remove_last $ get_pcontext e.
 
   Definition get_pcontext_indices_without_tletin (indice:context) e :=
-    match get_pcontext_indices e with | Ok l => Ok $
+    let l := get_pcontext_indices e in
     List.concat
       (map2
         (fun a b =>
@@ -758,7 +773,6 @@ Section MktCase.
           | Some _ => []
           | None => [a] end)
         l (rev indice))
-    | Error msg => Error msg end
       .
 
   (*used for generating tCase term, the bbody of branch
@@ -876,10 +890,6 @@ Definition check_return_type (t:term) (e:infolocal) : Result (option nat) :=
 
 
 (*******)
-
-(* Print aname.
-
-Print name. *)
 
 (* Definition update_nt (e:infolocal) :infolocal :=
   let the_name := {| binder_name := nAnon; binder_relevance := Relevant|} in

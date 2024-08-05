@@ -6,7 +6,7 @@ Global Open Scope bs.
 Definition the_name := {| binder_name := nNamed "x";
                   binder_relevance := Relevant  |}.
 
-Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : term :=
+Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) : Result term :=
 
   let params := ty.(ind_params) in
   let n_ind := length ty.(ind_bodies) in
@@ -18,17 +18,17 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
             ) ty.(ind_bodies))
   in
 
-  let generate_inductive (i:Datatypes.nat) (body: one_inductive_body) :=
+  let generate_inductive (i:Datatypes.nat) (body: one_inductive_body) : def (Result term) :=
 
     let the_inductive := {| inductive_mind := na; inductive_ind := i |} in
     let indices := body.(ind_indices) in
 
-    let aux : infolocal -> Nat.t -> constructor_body -> (context * (infolocal -> term)) := fun e i b =>
+    let aux : infolocal -> Nat.t -> constructor_body -> (context * (infolocal -> Result term)) := fun e i b =>
       (b.(cstr_args),
        fun e =>
 
-        let constructor_current := tConstruct the_inductive i Instance.empty in
-        tApp
+        let constructor_current := Ok $ tConstruct the_inductive i Instance.empty in
+        tApp'
           constructor_current
           ((*the type parameters*) (*X*)
             (rels_of "params" e)
@@ -39,10 +39,11 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
               match arg.(decl_type) with
               (*type with indice/parameter*)
               | tApp (tRel j) tl =>
-                match is_rec_call e j with
+                &let kk := is_rec_call e j in
+                match kk with
                 | None => arg_current
                 | Some kk =>
-                  tApp
+                  tApp'
                     (*recursive call of the identity function*) (*id_vec*)
                     (geti_info "rels_of_id" e kk)
                     ( (*the parameter/indice of the identity function*) (*X n*)
@@ -51,36 +52,40 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
                       ++ [arg_current])
                 end
               | tRel j =>
-                match is_rec_call e j with
+                &let kk := is_rec_call e j in
+                match kk with
                 | None => arg_current
-                | Some kk => tApp (geti_info "rels_of_id" e kk) [arg_current]
+                | Some kk => tApp' (geti_info "rels_of_id" e kk) [arg_current]
                 end
               | tProd _ _ _ =>
                 (***********)
-                let fix transformer (t:term) e (u:infolocal -> term) :term :=
+                let fix transformer (t:term) e (u:infolocal -> Result term) :Result term :=
                   match t with
                   | tProd na t1 t2 =>
                     kptLambda (Savelist "arglambda") e na
                       (mapt e t1)
                       (fun e => transformer t2 e u)
                   | tApp (tRel j) tl =>
-                    match is_rec_call e j with
-                    | None => todo (*must be an error*)
+                    &let kk := is_rec_call e j in
+                    match kk with
+                    | None => Error "?0" (*must be an error*)
                     | Some kk =>
-                        tApp (geti_info "rels_of_id" e kk)
+                        tApp' (geti_info "rels_of_id" e kk)
                         (map (mapt e) tl ++
-                          [tApp (u e) (rels_of "arglambda" e)])
+                          [tApp' (u e) (rels_of "arglambda" e)])
                     end
                   | tRel j =>
-                    match is_rec_call e j with
-                    | None => todo (*must be an error*)
+                    &let kk := is_rec_call e j in
+                    match kk with
+                    | None => Error "?1" (*must be an error*)
                     | Some kk =>
-                        tApp (geti_info "rels_of_id" e kk) [tApp (u e) (rels_of "arglambda" e)]
+                        tApp' (geti_info "rels_of_id" e kk) [tApp' (u e) (rels_of "arglambda" e)]
                     end
-                  | _ => todo
+                  | _ => Error "todo"
                   end
                 in
-                match check_return_type arg.(decl_type) e with
+                &let t2 := check_return_type arg.(decl_type) e in
+                match t2 with
                 | None => arg_current
                 | Some _ =>
                     transformer arg.(decl_type) e (fun e => get_arg_current e)
@@ -100,9 +105,9 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         e <- it_kptProd_default (Some "params") (initial_info) params;;
         e <- it_mktProd_default (Some "indices") e indices;;
         e <- mktProd NoSave e the_name
-              (tApp (tInd the_inductive Instance.empty)
+              (tApp' (Ok $ tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;
-        tApp (tInd the_inductive Instance.empty)
+        tApp' (Ok $ tInd the_inductive Instance.empty)
           (rels_of "params" e ++ rels_of "indices" e);
 
       (*params is in reverse order*)
@@ -110,7 +115,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
         e <- it_kptLambda_default (Some "params") (initial_info) params;;
         e <- it_mktLambda_default (Some "indices") e (rev indices);;
         e <- mktLambda (Saveitem "x") e the_name
-              (tApp (tInd the_inductive Instance.empty)
+              (tApp' (Ok $ tInd the_inductive Instance.empty)
                 (rels_of "params" e ++ rels_of "indices" e));;
         mktCase e
           {|  ci_ind := the_inductive;
@@ -120,7 +125,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
           (fun e => rels_of "params" e)
           (fun e => repeat the_name (1 + length indices))
           (fun e =>
-            tApp (tInd the_inductive Instance.empty)
+            tApp' (Ok $ tInd the_inductive Instance.empty)
             ((rels_of "params" e ) ++ (get_pcontext_indices e)))
           (fun e => rel_of "x" e)
           (fun e => mapi (aux e) body.(ind_ctors));
@@ -128,7 +133,7 @@ Definition GenerateIdentity_param (na : kername) (ty :  mutual_inductive_body) :
       rarg := length indices + length params
     |}
   in
-  tFix (mapi generate_inductive ty.(ind_bodies)) 0
+  tFix' (mapi generate_inductive ty.(ind_bodies)) 0
 .
 
 
@@ -143,12 +148,22 @@ Definition generate_identity {A} (a : A) (out : option ident): TemplateMonad uni
       let kn := ind.(inductive_mind) in
       $let mind := tmQuoteInductive kn in
       let id := GenerateIdentity_param kn mind in
-      $let u := tmUnquote id in
-      $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
+      $let id := tmEval cbv id in
+      match id with
+      | Ok id =>
+        $let u := tmUnquote id in
+        $let r := tmEval (unfold kn_myProjT2) (my_projT2 u) in
+          match out with
+          | Some name => tmDefinitionRed name (Some hnf) r ;; ret tt
+          | None => tmPrint r
+          end
+      | Error msg =>
+        $let r := tmEval all msg in
         match out with
-        | Some name => tmDefinitionRed name (Some hnf) r ;; ret tt
+        | Some name => tmDefinitionRed name (Some hnf) r ;; tmPrint r ;; ret tt
         | None => tmPrint r
         end
+      end
     | _ => tmFail "no inductive"
     end.
 

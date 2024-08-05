@@ -22,10 +22,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
   (*make up the initial information, which has the information of the type name*)
   let initial_info :=  make_initial_info na ty in
   (* suppose single inductive body*)
-  (* match hd_error ty.(ind_bodies) with
-  | None => Error "0 inductive bodies"
-  | Some body => *)
-  let body := hd todo ty.(ind_bodies) in
+  #let body := (hd_error ty.(ind_bodies), "error: hd. no inductive body.") in
   let the_inductive := {| inductive_mind := na; inductive_ind := 0 |} in
   let indices := body.(ind_indices) in
   (* let (params, no_uniform_params) := SeperateParams na ty in *)
@@ -65,19 +62,19 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
         fun e =>
         match t1 with
         | tRel i =>
-          match is_rec_call e i with
-          | Ok (Some _) =>
+          &let kk := is_rec_call e i in
+          match kk with
+          | Some _ =>
             e <- mktProd (Savelist "args") e na (mapt e t1);;
             kptProd NoSave e the_name
               (tApp' (rel_of "P" e) [get_info_last "args" e (*tRel 0*)])
               t
           (*ex. forall (n:nat)/  A*)
-          | Ok None =>
+          | None =>
             (*save the argument n into information list "args"*)
             kptProd (Savelist "args") e na
               (mapt e t1)
               t
-          | Error msg => Error msg
           end
         (*ex. vec A n*)
         | tApp (tRel i) tl =>
@@ -226,78 +223,69 @@ Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body
         match arg.(decl_body) with
         | Some t0 => kptLetIn NoSave e t0 na (mapt e t0) (mapt e t1) t
         | None =>
-          match normal e t1 with
-          | None => Error "term not normalisable"
-          | Some t1 =>
-            match t1 with
-            | tRel i =>
-              match is_rec_call e i with
-              | Ok (Some kk) =>
-                e <- mktProd (Savelist "args") e na (mapt e t1);;
-                kptProd NoSave e the_name
-                  (
-                    tApp' (geti_info "P" e kk) [get_info_last "args" e])
-                  ( t)
-              | Ok None =>
-                kptProd (Savelist "args") e na
-                  (mapt e t1)
-                  ( t)
-              | Error msg => Error msg
-              end
-            | tApp (tRel i) tl =>
-              match is_rec_call e i with
-              | Ok (Some kk) =>
-                e <- mktProd (Savelist "args") e na (mapt e t1);;
-                kptProd NoSave e the_name
-                  (tApp'
-                    (geti_info "P" e kk)
-                    (let tl := n_tl tl (length params) in
-                      (map (mapt e) tl) ++ [(get_info_last "args" e)])
-                  ) ( t)
-              | Ok None =>
-                kptProd (Savelist "args") e na
-                  (mapt e t1)
-                  ( t)
-              | Error msg => Error msg
-              end
-            (*****************************************)
-            | tProd na _ _ =>
-              match check_return_type t1 e with
-              | Ok None => kptProd (Savelist "args") e na ( mapt e t1) ( t)
-              | Ok (Some _) =>
-                let fix aux_nested e t1 :=
-                  match t1 with
-                  | tProd na ta tb =>
-                    kptProd (Savelist "arglambda") e na
-                      (mapt e ta) (fun e => aux_nested e tb)
-                  | tRel i =>
-                    match is_rec_call e i with
-                    | Ok None => Error "?"
-                    | Ok (Some kk) =>
-                      tApp' (geti_info "P" e kk)
-                        [tApp' (get_info_last "args" e) (rels_of "arglambda" e)]
-                    | Error msg => Error msg
-                    end
-                  | tApp (tRel i) tl =>
-                    match is_rec_call e i with
-                    | Ok None => Error "?"
-                    | Ok (Some kk) =>
-                      tApp' (geti_info "P" e kk)
-                        (let tl := n_tl tl (length params) in
-                          (map (mapt e) tl) ++
-                          [tApp' (get_info_last "args" e) (rels_of "arglambda" e)])
-                    | Error msg => Error msg
-                    end
-                  | _ => Error "todo" end in
-                e <- mktProd (Savelist "args") e na (mapt e t1);;
-                kptProd NoSave e the_name (aux_nested e t1) ( t)
-              | Error msg => Error msg
-              end
-            (*****************************************)
-            | _ => kptProd (Savelist "args") e na
-                    (mapt e t1)
-                    ( t)
+          #let t1 := (normal e t1, "error : normal") in
+          match t1 with
+          | tRel i =>
+            match is_rec_call e i with
+            | Ok (Some kk) =>
+              e <- mktProd (Savelist "args") e na (mapt e t1);;
+              kptProd NoSave e the_name
+                (
+                  tApp' (geti_info "P" e kk) [get_info_last "args" e])
+                ( t)
+            | Ok None =>
+              kptProd (Savelist "args") e na
+                (mapt e t1)
+                ( t)
+            | Error msg => Error msg
             end
+          | tApp (tRel i) tl =>
+            match is_rec_call e i with
+            | Ok (Some kk) =>
+              e <- mktProd (Savelist "args") e na (mapt e t1);;
+              kptProd NoSave e the_name
+                (tApp'
+                  (geti_info "P" e kk)
+                  (let tl := n_tl tl (length params) in
+                    (map (mapt e) tl) ++ [(get_info_last "args" e)])
+                ) ( t)
+            | Ok None =>
+              kptProd (Savelist "args") e na
+                (mapt e t1)
+                ( t)
+            | Error msg => Error msg
+            end
+          (*****************************************)
+          | tProd na _ _ =>
+            match check_return_type t1 e with
+            | Ok None => kptProd (Savelist "args") e na ( mapt e t1) ( t)
+            | Ok (Some _) =>
+              let fix aux_nested e t1 :=
+                match t1 with
+                | tProd na ta tb =>
+                  kptProd (Savelist "arglambda") e na
+                    (mapt e ta) (fun e => aux_nested e tb)
+                | tRel i =>
+                  &let kk := is_rec_call e i in
+                  #let kk := (kk, "?") in
+                  tApp' (geti_info "P" e kk)
+                    [tApp' (get_info_last "args" e) (rels_of "arglambda" e)]
+                | tApp (tRel i) tl =>
+                  &let kk := is_rec_call e i in
+                  #let kk := (kk, "?") in
+                  tApp' (geti_info "P" e kk)
+                    (let tl := n_tl tl (length params) in
+                      (map (mapt e) tl) ++
+                      [tApp' (get_info_last "args" e) (rels_of "arglambda" e)])
+                | _ => Error "todo" end in
+              e <- mktProd (Savelist "args") e na (mapt e t1);;
+              kptProd NoSave e the_name (aux_nested e t1) ( t)
+            | Error msg => Error msg
+            end
+          (*****************************************)
+          | _ => kptProd (Savelist "args") e na
+                  (mapt e t1)
+                  ( t)
           end
         end
       in
@@ -310,7 +298,7 @@ Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body
             auxctr i a) t
       ) b t e
   in
-  let mainbody := nth n bodies todo in
+  #let mainbody := (nth_error bodies n, "error: nth_error") in
   let indices_main := mainbody.(ind_indices) in
   let the_inductive_main := {| inductive_mind := kername; inductive_ind := 0|} in
 
@@ -355,6 +343,7 @@ Definition generate_indp {A} (a : A) (out : option ident): TemplateMonad unit :=
       let kn := ind.(inductive_mind) in
       $let mind := tmQuoteInductive kn in
       let id := GenerateIndp_mutual kn mind in
+      $let id := tmEval cbv id in
       match id with
       | Ok id =>
         $let u := tmUnquote id in
