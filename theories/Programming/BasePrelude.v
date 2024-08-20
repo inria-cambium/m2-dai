@@ -157,7 +157,6 @@ Inductive saveinfo:=
   | Saveitem (s:string)
   | NoSave.
 
-(* Print option_map. *)
 
 Local Definition lift_renaming t :=
   map (fun t =>
@@ -243,10 +242,6 @@ Local Definition geti_rename (e:infolocal) (i:nat) :=
 (**************************************)
 
 
-
-
-(* Print ssrfun.Option.bind. *)
-(* Print ssrfun.Option.map. *)
 
 
 
@@ -457,6 +452,28 @@ Definition it_mktLambda := it_mktbind tLambda.
 Definition it_kptLambda_default := it_kptbind_default tLambda.
 Definition it_mktLambda_default := it_mktbind_default tLambda.
 
+(*
+Remark: how to choose [mktbind] [kptbind]:
+
+  Source: inductive type definition
+    Inductive T (A1:Param1) ... (Ak:Paramk): Ind1 -> Ind2 ...  ->Indm -> Type := ... .
+
+  [kptProd] uses [update_kp], [update_mk] uses [update_mk]
+
+  [update_kp] changes the information of "rels_of_T", add one new renamed item into the shifted renaming list
+  [update_mk] does not change the information of "rels_of_T", just shift the renaming list
+
+  When creating a Prod in the target,
+  use [kptProd saveinfo na e t1 t2] if [na] refers to a term that could be referenced to (by tRel _) in the source
+  use [mktProd] otherwise.
+
+  ex. for the type definitin above,
+    (A1, ... Ak) can be referenced in the source, so we use [kptProd]
+    (Ind1,..., Indm) can not be referenced in the source, so use [mktProd]
+*)
+
+
+
 
 Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
   (dn:aname) (dt:term) (db:infolocal -> term) (rarg:nat) :def term :=
@@ -470,6 +487,7 @@ Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
     rarg := rarg
   |}.
 
+Section MktCase.
 
 Definition mktCase (e:infolocal)
   case_info mkpuinst mkpparams mkpcontext mkpreturn tmatched
@@ -534,15 +552,12 @@ Definition get_pcontext_indices_without_tletin (indice:context) e :=
         | None => [a] end)
       l (rev indice)).
 
-
-
 (*used for generating tCase term, the bbody of branch
   For each branch of match with,
     When iterate on the arguments of this branch,
     this function return the (tRel _) term of the argument that we are visiting*)
 Definition get_arg_current e :=
   rel_of "arg_current" e.
-
 
 
 (*Used only in mktCase, 'match with', to be explained *)
@@ -571,26 +586,9 @@ Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
   in
   Ffix f l e [].
 
+End MktCase.
 
-(*
-Remark: how to choose [mktbind] [kptbind]:
 
-  Source: inductive type definition
-    Inductive T (A1:Param1) ... (Ak:Paramk): Ind1 -> Ind2 ...  ->Indm -> Type := ... .
-
-  [kptProd] uses [update_kp], [update_mk] uses [update_mk]
-
-  [update_kp] changes the information of "rels_of_T", add one new renamed item into the shifted renaming list
-  [update_mk] does not change the information of "rels_of_T", just shift the renaming list
-
-  When creating a Prod in the target,
-  use [kptProd saveinfo na e t1 t2] if [na] refers to a term that could be referenced to (by tRel _) in the source
-  use [mktProd] otherwise.
-
-  ex. for the type definitin above,
-    (A1, ... Ak) can be referenced in the source, so we use [kptProd]
-    (Ind1,..., Indm) can not be referenced in the source, so use [mktProd]
-*)
 
 
 (*normalise the term*)
@@ -643,80 +641,4 @@ Definition check_return_type (t:term) (e:infolocal) : option nat :=
     | _ => None
     end in
   Ffix t e.
-
-
-
-
-
-
-(****************************************************************)
-(*If just need to get information from the source
-  no need to generate term, use functions below
-*)
-
-Definition update_kp_util {Y:Type} saveinfo na e (acc:infolocal -> Y) :Y :=
-  let e' := update_kp na e saveinfo in
-  acc e'.
-
-Definition update_kp_letin_util {Y:Type} saveinfo na e def (acc:infolocal -> Y) :Y :=
-  let e' := update_kp_withbody na e saveinfo def in
-  acc e'.
-
-
-(* Definition test_it_update  *)
-
-Definition fold_update_kp_util {Y:Type} saveinfo (ctx:context) (e:infolocal)
- (acc: infolocal -> Y) :Y :=
-  let fix Ffix ctx e acc :=
-    match ctx with
-    | [] => acc e
-    | decl :: ctx' =>
-        Ffix ctx' e (
-          fun e =>
-            update_kp_util saveinfo decl.(decl_name) e acc
-        )
-  end in
-  Ffix ctx e acc.
-
-
-
-
-
-
-(* Definition it_kptacc (saveinfo:option string) (e:infolocal) (tp:infolocal -> X -> X) (ctx:context) (t: infolocal -> X) : X :=
-  let saveinfo :=
-    match saveinfo with | None => NoSave | Some str => Savelist str
-  end in
-  let fix Ffix ctx e t:=
-    match ctx with
-    | [] => t e
-    | decl :: ctx' =>
-      match decl.(decl_body) with
-      | None =>
-          Ffix ctx' e (
-            fun e =>
-              kptbind saveinfo e decl.(decl_name)
-                (tp e decl.(decl_type)) t
-          )
-      | Some t0 =>
-          Ffix ctx' e (
-            fun e =>
-              kptLetIn NoSave (*todo*)e t0 decl.(decl_name)
-                (tp e t0) (tp e decl.(decl_type)) t
-          )
-      end
-    end in
-  Ffix ctx e t. *)
-
-
-  (* aux : context_decl -> (infolocal -> X) -> infolocal -> X *)
-
-
-(* Definition check_args {X:Type} saveinfo ctx
-  ( aux : context_decl -> (infolocal -> X) -> infolocal -> X ) 
-  ( init : infolocal -> X): infolocal -> X :=
-  let fix Ffix ctx x :=
-    match ctx with
-    | [] => x
-    | a :: ctx' => Ffix ctx' (aux a x) *)
 
