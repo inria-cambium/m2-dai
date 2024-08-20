@@ -24,8 +24,7 @@ Definition mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m)
 
 Definition it_kpcProd {n k m nind:nat} {l} (saveinfo:saveinfo)
   (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: forall (e:cinfo (n + m) (k + m) nind (addl l saveinfo m)) ,
-    cterm (n + m))
+  (t: cinfo (n + m) (k + m) nind (addl l saveinfo m) -> cterm (n + m))
   : cterm n
   := it_kpcProd saveinfo ctx e t.
 
@@ -52,7 +51,7 @@ Definition rels_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l)
   := rels_of na e.
 
 Definition geti_info {n k nind l} (na:string) (e:cinfo n k nind l) (i:nat)
-  (h:within_info e na i)
+  (h:within_info l na i)
   :cterm n
   := geti_info na e i h. *)
 

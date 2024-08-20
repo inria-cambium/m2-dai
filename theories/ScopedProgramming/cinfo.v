@@ -229,7 +229,7 @@ Record cinfo (n k nind:nat) (l:list (string * nat)) :Type := mkcinfo {
   ei: infolocal;
   ci : closed_info_n n ei;
   ck : k <= #|ei.(renaming)|;
-  Pl : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| = y.2) ei.(info) l;
+  Pl : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| >= y.2) ei.(info) l;
 }.
 
 Arguments mkcinfo {n k nind l}.
@@ -263,11 +263,11 @@ Admitted.
 Lemma lemy01 {l l'}:
   Forall2
   (fun (x : string × list (BasicAst.context_decl nat))
-    (y : string × nat) => x.1 = y.1 /\ #|x.2| = y.2) l
+    (y : string × nat) => x.1 = y.1 /\ #|x.2| >= y.2) l
   l' ->
   Forall2
   (fun (x : string × list (BasicAst.context_decl nat))
-     (y : string × nat) => x.1 = y.1 /\ #|x.2| = y.2)
+     (y : string × nat) => x.1 = y.1 /\ #|x.2| >= y.2)
   (map
      (fun x : string × list (BasicAst.context_decl nat) =>
       (x.1, plus_one_index x.2)) l) l'.
@@ -282,11 +282,11 @@ Qed.
 
 Lemma lemx01 {info l s na} :
   Forall2
-    (fun x y => x.1 = y.1 /\ #|x.2| = y.2)
+    (fun x y => x.1 = y.1 /\ #|x.2| >= y.2)
     info l
   ->
   Forall2
-    (fun x y => x.1 = y.1 /\ #|x.2| = y.2)
+    (fun x y => x.1 = y.1 /\ #|x.2| >= y.2)
     (replace_add_info
       (map
           (fun x => (x.1, plus_one_index x.2)) info) s
@@ -329,9 +329,6 @@ Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) 
       fun  x => (fst x, (plus_one_index (snd x)))
     ) e.(info)
   in
-  (* let info_nat :=
-    map (fun x => (x.1, S x.2)) e.(info_nat)
-  in *)
   let info_source :=
     map (
       fun  x => (fst x, (plus_one_index (snd x)))
@@ -490,7 +487,7 @@ Proof.
     simpl. simpl in H.
     destruct H0. rewrite H0.
     destruct (String.eqb str t0) eqn:e0.
-    + rewrite H1. auto.
+    + lia.
     + auto.
 Qed.
 

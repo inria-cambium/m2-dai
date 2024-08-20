@@ -31,7 +31,7 @@ Qed.
 
 Program Definition auxarg {n m nind l} (arg:context_decl_closed m)
   (h:has_info l "P" nind) kn ind_npars'
-  (ta:forall {k}, cinfo k (S m) nind (replace_add_l l "args") -> cterm k)
+  (ta:forall {k}, cinfo k (S m) nind _ -> cterm k)
   : cinfo n m nind l -> cterm n :=
   let t1 := proj1_sig arg.(decl_type) in
   let na := arg.(decl_name) in

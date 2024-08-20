@@ -224,8 +224,7 @@ Definition add_emp_info e saveinfo :=
 
 Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
   (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: forall (e:cinfo (n + m) (k+m) nind (addl l saveinfo m)),
-    cterm (n + m) ) {struct ctx}
+  (t: cinfo (n + m) (k+m) nind (addl l saveinfo m) -> cterm (n + m) ) {struct ctx}
   : cterm n :=
   (
     match ctx as ctx0 in context_closed _ m2
@@ -443,7 +442,7 @@ Forall2
    (y : string × nat)
  =>
  x.1 = y.1 /\
- #|x.2| = y.2) info
+ #|x.2| >= y.2) info
 (addl' l
    saveinfo n0)
 ->
@@ -454,7 +453,7 @@ Forall2
               (BasicAst.context_decl
                  nat))
      (y : string × nat) =>
-   x.1 = y.1 /\ #|x.2| = y.2)
+   x.1 = y.1 /\ #|x.2| >= y.2)
   (replace_add_info
      (map
         (fun
@@ -479,7 +478,7 @@ Proof.
     rewrite H3. assert (String.eqb saveinfo saveinfo = true). apply lemstr. auto.
     rewrite H7. constructor.
     simpl. split. auto. rewrite plus_one_index_length. auto.
-    simpl. inversion H. eapply lemy01. exact H13.
+    simpl. inversion H. lia. eapply lemy01. auto.
 Qed.
 
 Program Fixpoint Ffix_mkcProd' {n k nind m:nat} {l} (saveinfo:string)
