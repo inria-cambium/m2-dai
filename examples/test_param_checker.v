@@ -34,3 +34,16 @@ Inductive Acc (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
 	Acc_intro : (forall y : A, R y x -> Acc A R y) -> Acc A R x.
 Definition input_acc:= ($run (tmQuoteInductive (thisfile, "Acc"))).
 Compute (CheckUniformParam (thisfile, "Acc") input_acc).
+
+Inductive Acc' (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
+	Acc_intro' : (let a := A in forall y : a, R y x -> Acc' A R y) -> Acc' A R x.
+Definition input_acc':= ($run (tmQuoteInductive (thisfile, "Acc'"))).
+Compute (CheckUniformParam (thisfile, "Acc'") input_acc').
+
+
+Inductive nunest (A B C : Type) : Type :=
+| nunest_nil : A -> nunest A B C
+| nunest_cons : list (nunest A (B * B) C) -> nunest A B C.
+Definition input_nunest := ($run (tmQuoteInductive (thisfile, "nunest"))).
+Compute (CheckUniformParam (thisfile, "nunest") input_nunest).
+
