@@ -257,7 +257,19 @@ Definition replace_info_len saveinfo (l:list (string * nat)) :=
 
 
 Lemma lemstr: forall s1 s2 :string, String.eqb s1 s2 = true <-> s1 = s2.
-Admitted.
+  (* pose (h := bytestring.StringOT.compare_eq). *)
+  intros. rewrite String.eqb_compare. split.
+  - intro.
+    destruct (String.compare s1 s2) eqn:e0.
+    + apply bytestring.StringOT.compare_eq. auto.
+    + inversion H.
+    + inversion H.
+  - intro.
+    apply bytestring.StringOT.compare_eq in H.
+    assert (String.compare s1 s2 = Eq). auto.
+    rewrite H0. auto.
+Qed.
+
 
 
 Lemma lemy01 {l l'}:
