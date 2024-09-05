@@ -547,9 +547,6 @@ End ctr_new.
 (* Definition add_emp_info na e :infolocal :=
     add_listinfo e na []. *)
 
-
-(* Context (mapt : infolocal -> term -> term). *)
-
 Section term_generation.
 
   Context (bind: aname -> term -> term -> term).
@@ -810,26 +807,6 @@ Section MktCase.
 End MktCase.
 
 
-
-(*
-Remark: how to choose [mktbind] [kptbind]:
-
-  Source: inductive type definition
-    Inductive T (A1:Param1) ... (Ak:Paramk): Ind1 -> Ind2 ...  ->Indm -> Type := ... .
-
-  [kptProd] uses [update_kp], [update_mk] uses [update_mk]
-
-  [update_kp] changes the information of "rels_of_T", add one new renamed item into the shifted renaming list
-  [update_mk] does not change the information of "rels_of_T", just shift the renaming list
-
-  When creating a Prod in the target,
-  use [kptProd saveinfo na e t1 t2] if [na] refers to a term that could be referenced to (by tRel _) in the source
-  use [mktProd] otherwise.
-
-  ex. for the type definitin above,
-    (A1, ... Ak) can be referenced in the source, so we use [kptProd]
-    (Ind1,..., Indm) can not be referenced in the source, so use [mktProd]
-*)
 
 
 (*normalise the term*)
