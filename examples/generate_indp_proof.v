@@ -28,7 +28,7 @@ Definition GenerateIndp_proof (kername : kername) (ty :  mutual_inductive_body) 
 
   let aux (e:infolocal) (b:list constructor_body) (j:nat) (t:infolocal -> Result term) : Result term :=
     let auxctr (i:nat) (ctr:constructor_body) (e:infolocal): Result term :=
-      (** trick **) let e := add_emp_info "args" e in
+      (* * trick * let e := add_emp_info "args" e in *)
       let constructor_current :=
         Ok $ tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
       let transformer_result :infolocal -> Result term := fun e =>

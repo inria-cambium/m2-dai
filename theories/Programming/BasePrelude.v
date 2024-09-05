@@ -342,17 +342,17 @@ Definition get_info_last (na:string) (e:infolocal) :Result term :=
 
 
 (*return the reversal tRel term list of the information list named [na] of [e]*)
-Definition rels_of' (na:string) (e:infolocal) :Result (list term) :=
+(* Definition rels_of' (na:string) (e:infolocal) :Result (list term) :=
   let l := lookup_list e.(info) na in
   match l with
   | Error msg => Error $ "error: rels_of. " +++ msg
   | Ok l => Ok $ rev_map (fun x => tRel x.(decl_type)) l
-  end.
-
+  end. *)
 Definition rels_of (na:string) (e:infolocal) : list (Result term) :=
   let l := lookup_list e.(info) na in
   match l with
-  | Error msg => [Error $ "error: rels_of. " +++ msg]
+  | Error _ => []
+  (* | Error msg => [Error $ "error: rels_of. " +++ msg] *)
   | Ok l => rev_map (fun x => Ok $ tRel x.(decl_type)) l
   end.
 
@@ -392,27 +392,6 @@ Definition is_rec_call (e:infolocal) i : Result (option nat):=
     end in
     Ok $ Ffix l 0
   end.
-
-
-
-
-
-
-(* Definition add_emp_info *)
-
-(* Definition tolist {A} : Result (list A) -> list (Result A) := *)
-
-(* Definition result_list_append {A} : Result (list A) -> Result (list A) -> Result (list A) :=
-  fun l1 l2 =>
-    match l1 with
-    | Error msg => Error msg
-    | Ok l1 =>
-      match l2 with
-      | Error msg => Error msg
-      | Ok l2 => Ok $ l1 ++ l2 end end. *)
-
-(* Notation "a ++* b" := (result_list_append a b) (at level 100, right associativity). *)
-
 
 
 
@@ -569,8 +548,8 @@ Definition mapt (e:infolocal) (t:term) : Result term:=
 End ctr_new.
 
 
-Definition add_emp_info na e :infolocal :=
-    add_listinfo e na [].
+(* Definition add_emp_info na e :infolocal :=
+    add_listinfo e na []. *)
 
 
 (* Context (mapt : infolocal -> term -> term). *)
@@ -608,9 +587,9 @@ Section term_generation.
 
 
   Definition it_kptbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> Result term) (ctx:context) (t: infolocal -> Result term) : Result term :=
-    let e :=
+    (* let e :=
       match saveinfo with | None => e | Some na => add_emp_info na e end
-    in
+    in *)
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in
@@ -636,9 +615,9 @@ Section term_generation.
     Ffix ctx e t.
 
   Definition it_mktbind (saveinfo:option string) (e:infolocal) (tp:infolocal -> term -> Result term) (ctx:context) (t: infolocal -> Result term) : Result term :=
-    let e :=
+    (* let e :=
       match saveinfo with | None => e | Some na => add_emp_info na e end
-    in
+    in *)
     let saveinfo :=
       match saveinfo with | None => NoSave | Some str => Savelist str
     end in

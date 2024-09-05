@@ -37,7 +37,7 @@ Definition GenerateIndp (na : kername) (ty :  mutual_inductive_body) : Result te
     let auxctr (i:nat) (ctr:constructor_body) (e:infolocal) : Result term :=
       let constructor_current := tConstruct the_inductive i [] in
       let cstr_type := ctr.(cstr_type) in
-      (** trick **) let e := add_emp_info "args" e in
+      (* * trick * let e := add_emp_info "args" e in *)
 
       (*transforme the return type of constructor*)
       (*'cons : ... -> vec A (S n)'   ~~~>   P (S n) (cons A a n v)
@@ -205,7 +205,7 @@ Definition GenerateIndp_mutual' (kername : kername) (ty :  mutual_inductive_body
     let auxctr (i:nat) (ctr:constructor_body) (e:infolocal): Result term :=
       let constructor_current :=
         tConstruct {| inductive_mind := kername; inductive_ind := j |} i [] in
-      (** trick **) let e := add_emp_info "args" e in
+      (* * trick * let e := add_emp_info "args" e in *)
       let transformer_result :infolocal -> Result term := fun e =>
         tApp' (geti_info "P" e j)
           (
