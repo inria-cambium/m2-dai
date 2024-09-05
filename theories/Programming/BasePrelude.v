@@ -212,7 +212,6 @@ Inductive saveinfo:=
   | Saveitem (s:string)
   | NoSave.
 
-(* Print option_map. *)
 
 Local Definition lift_renaming t :=
   map (fun t =>
@@ -302,9 +301,6 @@ Local Definition geti_rename (e:infolocal) (i:nat) :Result term :=
 
 
 
-
-(* Print ssrfun.Option.bind. *)
-(* Print ssrfun.Option.map. *)
 
 
 
@@ -667,6 +663,28 @@ Definition it_mktLambda := it_mktbind tLambda.
 Definition it_kptLambda_default := it_kptbind_default tLambda.
 Definition it_mktLambda_default := it_mktbind_default tLambda.
 
+(*
+Remark: how to choose [mktbind] [kptbind]:
+
+  Source: inductive type definition
+    Inductive T (A1:Param1) ... (Ak:Paramk): Ind1 -> Ind2 ...  ->Indm -> Type := ... .
+
+  [kptProd] uses [update_kp], [update_mk] uses [update_mk]
+
+  [update_kp] changes the information of "rels_of_T", add one new renamed item into the shifted renaming list
+  [update_mk] does not change the information of "rels_of_T", just shift the renaming list
+
+  When creating a Prod in the target,
+  use [kptProd saveinfo na e t1 t2] if [na] refers to a term that could be referenced to (by tRel _) in the source
+  use [mktProd] otherwise.
+
+  ex. for the type definitin above,
+    (A1, ... Ak) can be referenced in the source, so we use [kptProd]
+    (Ind1,..., Indm) can not be referenced in the source, so use [mktProd]
+*)
+
+
+
 
 Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
   (dn:aname) (dt:Result term) (db:infolocal -> Result term) (rarg:nat) :def (Result term) :=
@@ -866,36 +884,4 @@ Definition check_return_type (t:term) (e:infolocal) : Result (option nat) :=
     | _ => Ok $ None
     end in
   Ffix t e.
-
-
-(*******)
-
-(* Definition update_nt (e:infolocal) :infolocal :=
-  let the_name := {| binder_name := nAnon; binder_relevance := Relevant|} in
-  let item_rename := mkdecl the_name None (tRel 0) in
-  let renaming :=
-    item_rename :: (e.(renaming))
-  in
-  let info_source :=
-    map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (plus_one_index l))
-      | (na, information_nat n) => (na, information_nat (1 + n)) end
-    ) e.(info_source)
-  in
-  let info := e.(info) in
-  mkinfo renaming info info_source e.(kn).
-
-Definition next (t:infolocal -> term) : infolocal -> term :=
-  fun e => t (update_nt e). *)
-
-(* Definition  *)
-
-
-(* Print Result_of_list. *)
-
-(* Compute (Result_of_list [Ok 1; Ok 2; Error ""]). *)
-
-
-
 
