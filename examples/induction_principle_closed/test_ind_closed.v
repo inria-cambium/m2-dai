@@ -1,4 +1,4 @@
-Require Import ind_closed List.
+Require Import induction_principle_closed.ind_closed List.
 Import ListNotations.
 Import bytestring.
 
