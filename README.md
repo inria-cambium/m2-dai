@@ -33,17 +33,21 @@ At the main root of the project, use:
   + ScopedProgramming: extended framework for meta-programming with scope guarantees
 
 - examples
-  + generate_inductive_principle.v, generate_identity.v, generate_indp_proof.v : use cases for the framework
-  + ind_closed.v : use case for the extended framework with scope guarantees
-  + test_generate_inductive_principle.v, test_identity.v, test_indp_proof.v, test_ind_closed.v : corresponding test files
+
+  use cases for the 1st framework:
+  + identity : deriving the identity function of any inductive type
+  + induction_principle : deriving the induction principle (just type, no proof term) of any inductive type
+  + induction_principle_proof : deriving the induction principle (proof term) of any inductive type
+
+  use case for the extended framework with scope guarantees:
+  + induction_principle_closed : deriving the induction principle (just type, no proof term) of any inductive type
 
 ## Test
 
-Open a test file, such as examples/test_generate_inductive.v, you can define an inductive type `my_type`,
+Open a test file, such as examples/induction_principle/test_generate_inductive.v, you can define an inductive type `my_type`,
 
 Then the following code defines a Coq term with name `"my_indp"` which is the (type of) induction principle of `my_type`.
 
 ```
 MetaCoq Run Derive InductivePrinciple my_type as "my_indp".
 ```
-
