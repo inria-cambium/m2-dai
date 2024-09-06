@@ -12,14 +12,17 @@ theories/ScopedProgramming/cterm_generation.v
 theories/ScopedProgramming.v
 
 -Q examples ""
+
 examples/test_param_checker.v
-examples/generate_identity.v
-examples/test_identity.v
-examples/generate_inductive_principle.v
-examples/test_inductive_principle.v
-examples/generate_indp_proof.v
-examples/test_indp_proof.v
 
-examples/ind_closed.v
-examples/test_ind_closed.v
+examples/identity/generate_identity.v
+examples/identity/test_identity.v
 
+examples/induction_principle/generate_inductive_principle.v
+examples/induction_principle/test_inductive_principle.v
+
+examples/induction_principle_proof/generate_indp_proof.v
+examples/induction_principle_proof/test_indp_proof.v
+
+examples/induction_principle_closed/ind_closed.v
+examples/induction_principle_closed/test_ind_closed.v
