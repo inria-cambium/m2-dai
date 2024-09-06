@@ -1,12 +1,24 @@
-Require Import generate_indp_proof List String.
+Require Import induction_principle.generate_inductive_principle List String.
 Import ListNotations.
 Import bytestring.
 
+
+MetaCoq Run Derive InductivePrinciple nat as "indp_nat".
+Print indp_nat.
+
+
 Inductive myvec (A:Type) : nat -> Type :=
-| myvnil : myvec A 0
-| myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
+ | myvnil : myvec A 0
+ | myvcons (x:A) (n:nat) (v:myvec A n) : myvec A (S n).
 MetaCoq Run Derive InductivePrinciple myvec as "indp_myvec".
 Print indp_myvec.
+
+
+Inductive myvec2 (A:Type) : nat -> Type :=
+ | myvnil2 : myvec2 A 1
+ | myvcons2 (x:A) (n:nat) (l:list A) (v1 v2:myvec2 A n) : myvec2 A (S n).
+MetaCoq Run Derive InductivePrinciple myvec2 as "indp_myvec2".
+Print indp_myvec2.
 
 
 Inductive myterm (A B:Type) : nat -> list A -> list B-> Type :=
@@ -24,6 +36,26 @@ Inductive All2 (A B : Type) (R : A -> B -> Type) : list A -> list B -> Type :=
 .
 MetaCoq Run Derive InductivePrinciple All2 as "indp_all2".
 Print indp_all2.
+
+
+(* le defined with two indices *)
+Inductive le: nat -> nat -> Type :=
+| le_refl n : le n n
+| le_S n m : le (S n) m -> le n m.
+MetaCoq Run Derive InductivePrinciple le as "indp_le".
+Print indp_le.
+
+(* le defined with one non-uniform parameter and one index *)
+Inductive le' (n: nat): nat -> Type :=
+| le_refl' : le' n n
+| le_S' m : le' (S n) m -> le' n m.
+MetaCoq Run Derive InductivePrinciple le' as "indp_le'".
+Print indp_le'.
+
+
+Inductive rtree : Type := T : list rtree -> rtree.
+MetaCoq Run Derive InductivePrinciple rtree as "indp_rtree". (* should raise an error message *)
+Print indp_rtree.
 
 
 Inductive ntree (A:Set) : Set :=
@@ -53,28 +85,12 @@ MetaCoq Run Derive InductivePrinciple Point as "indp_point".
 Print indp_point.
 
 
-Inductive le: nat -> nat -> Type :=
-| le_refl n : le n n
-| le_S n m : le (S n) m -> le n m.
-MetaCoq Run Derive InductivePrinciple le as "indp_le".
-Print indp_le.
-
-(*test non uniform parameters*)
-Inductive le' (n: nat): nat -> Type :=
-| le_refl' : le' n n
-| le_S' m : le' (S n) m -> le' n m.
-MetaCoq Run Derive InductivePrinciple le' as "indp_le'".
-Print indp_le'.
-
-
 Inductive Acc (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
 	Acc_intro : (forall y : A, R y x -> Acc A R y) -> Acc A R x.
 MetaCoq Run Derive InductivePrinciple Acc as "indp_acc".
 Print indp_acc.
 
 
-
-(* test : normal; letin *)
 
 Inductive myt0 (A:Type) (B: Type) : Type :=
   | Build0 (x:A) (b:B) (c:
@@ -108,8 +124,7 @@ Inductive testletin : let x := nat in x -> Type :=
   | C0: (let x := nat in x) -> (let y := option nat in prod y y ->
           nat) -> let z := nat in let w := z in w -> testletin 0.
 MetaCoq Run Derive InductivePrinciple testletin as "indp_testletin".
-Print testletin_ind.
-(* Load MetaCoqPrelude. *)
+Print indp_testletin.
 
 
 Inductive mynat'' :Type :=
