@@ -2,6 +2,7 @@
 
 theories/MetaCoqPrelude.v
 theories/Programming/BasePrelude.v
+theories/Programming/Visit.v
 theories/Programming/ParamChecker.v
 theories/Programming.v
 
@@ -22,4 +23,7 @@ examples/test_indp_proof.v
 
 examples/ind_closed.v
 examples/test_ind_closed.v
+
+examples/induction_principle_new_style/indp_new.v
+examples/induction_principle_new_style/test_indp_new.v
 

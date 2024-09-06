@@ -14,6 +14,8 @@ Notation "'try' '$let' ' x ':=' c1 'in' c2 'else' c3" := (@bind _ _ _ _ c1 (fun 
 
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 
+Notation "a |> b" := (b a) (at level 100, right associativity, only parsing).
+
 Notation " x '<-' c1 ';;' c2" := ( c1 (fun x => c2))
                                     (at level 100, c1 at next level, right associativity) : monad_scope.
 
@@ -28,7 +30,7 @@ Local Definition plus_one_index (l: list (BasicAst.context_decl nat)) :=
 Local Definition plus_k_index (l: list (BasicAst.context_decl nat)) k :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)+k)) l.
 
-Local Definition minus_one_index (l: list (BasicAst.context_decl nat)) :=
+Definition minus_one_index (l: list (BasicAst.context_decl nat)) :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)-1)) l.
 
 Inductive information : Type :=
@@ -71,7 +73,7 @@ Local Definition findi (x:nat) (l:list nat):=
   Ffix x l 0.
 
 (*repeat calling a function*)
-Local Fixpoint redo {A} (f:A->A) n a :=
+Fixpoint redo {A} (f:A->A) n a :=
   match n with
   | 0 => a
   | S n => f (redo f n a) end.
@@ -163,7 +165,59 @@ Local Definition lift_renaming t :=
         mkdecl t.(decl_name) t.(decl_body) (lift0 1 t.(decl_type))
   ) t.
 
-Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
+
+
+Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
+  let info := map (
+    fun x => match x with
+    | (na, information_list l) => (na, information_list (plus_one_index l))
+    | (na, information_nat n) => (na, information_nat (1 + n)) end
+  ) e.(info) in
+  let renaming := lift_renaming e.(renaming) in
+  let item := mkdeclnat na None 0 in
+  match saveinfo with
+  | NoSave => mkinfo renaming info e.(info_source) e.(kn)
+  | Saveitem str => mkinfo renaming ((str, information_nat 0)::info) e.(info_source) e.(kn)
+  | Savelist str => mkinfo renaming (replace_add_info info str item) e.(info_source) e.(kn)
+  end.
+
+(* Local Definition next (e:infolocal) : infolocal :=
+  let item_rename := mkdecl {|binder_name := nAnon; binder_relevance := Relevant|} None (tRel 0) in
+  let renaming :=
+    item_rename :: e.(renaming)
+  in
+  let info_source :=
+    map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (plus_one_index l))
+      | (na, information_nat n) => (na, information_nat (1 + n)) end
+    ) e.(info_source)
+  in
+  mkinfo renaming e.(info) info_source e.(kn). *)
+
+
+Definition next (na:aname) (body:option term) (e:infolocal) : infolocal :=
+  let item_rename := mkdecl na body (tRel 0) in
+  let renaming :=
+    item_rename :: e.(renaming)
+  in
+  let info_source :=
+    map (
+      fun x => match x with
+      | (na, information_list l) => (na, information_list (plus_one_index l))
+      | (na, information_nat n) => (na, information_nat (1 + n)) end
+    ) e.(info_source)
+  in
+  mkinfo renaming e.(info) info_source e.(kn).
+
+
+Definition update_kp na e saveinfo :=
+  next na None (update_mk na e saveinfo).
+
+Definition update_kp_withbody na e saveinfo body :=
+  next na body (update_mk na e saveinfo).
+
+(* Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   let item := mkdeclnat na None 0 in
   let item_rename := mkdecl na None (tRel 0) in
   let renaming :=
@@ -188,9 +242,10 @@ Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn)
   | Savelist str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
   end
-  .
+  . *)
 
-Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:option term) :=
+
+(* Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:option term) :=
   let item := mkdeclnat na None 0 in
   let item_rename := mkdecl na (t) (tRel 0) in
   let renaming :=
@@ -215,22 +270,8 @@ Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:op
   | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn)
   | Savelist str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
   end
-  .
+  . *)
 
-
-Local Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
-  let info := map (
-    fun x => match x with
-    | (na, information_list l) => (na, information_list (plus_one_index l))
-    | (na, information_nat n) => (na, information_nat (1 + n)) end
-  ) e.(info) in
-  let renaming := lift_renaming e.(renaming) in
-  let item := mkdeclnat na None 0 in
-  match saveinfo with
-  | NoSave => mkinfo renaming info e.(info_source) e.(kn)
-  | Saveitem str => mkinfo renaming ((str, information_nat 0)::info) e.(info_source) e.(kn)
-  | Savelist str => mkinfo renaming (replace_add_info info str item) e.(info_source) e.(kn)
-  end.
 
 (*return the [i]th element of the [e.(renaming)].
   Only used in mapt currently*)
@@ -473,6 +514,9 @@ Remark: how to choose [mktbind] [kptbind]:
 *)
 
 
+Definition mktLetIn (saveinfo:saveinfo) e na (t0:term) (t1:term) (t2:infolocal -> term) :=
+  let e' := update_mk na e saveinfo in
+  tLetIn na t0 t1 (t2 e').
 
 
 Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
