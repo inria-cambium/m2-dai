@@ -457,11 +457,11 @@ Defined. *)
 Program Definition geti_rename {n m nind:nat} {l} (e:cinfo n m nind l) (i:nat) (h:i<m) :cterm n :=
   let e' := ei e in
   let l := map decl_type e'.(renaming) in
-  existc (nth i l todo).
+  existc (nth i l (tRel 1000)).
 Obligation 1.
   destruct e. destruct ei0. destruct ci0. simpl.
   simpl in ck0.
-  assert (In (nth i (map decl_type renaming0) todo) (map decl_type renaming0)).
+  assert (In (nth i (map decl_type renaming0) (tRel 1000)) (map decl_type renaming0)).
   - eapply nth_In.
     rewrite (map_length decl_type). lia.
   - assert (forall x, In x (map decl_type renaming0) -> closedn n x).
@@ -509,7 +509,7 @@ Program Definition geti_info {n k nind l} (na:string) (e:cinfo n k nind l) (i:na
   let l := rev (lookup_list (ei e) na) in
   match nth_error l i with
   | Some x => existc (tRel (decl_type x))
-  | None => todo end.
+  | None => exist _ (tRel 1000) _ end.
 Next Obligation.
   assert (nth_error
           (rev (lookup_list (ei e) na))
@@ -544,13 +544,21 @@ Next Obligation.
       eapply H2 in H4. auto. eapply H3. eapply In_rev. auto.
   + inversion H.
 Qed.
+Next Obligation.
+  symmetry in Heq_anonymous.
+  apply nth_error_None in Heq_anonymous.
+  rewrite rev_length in Heq_anonymous.
+  pose (H := lem8989 e na i h).
+  lia.
+Qed.
+(* Next Obligation. *)
 
 Program Definition get_info_last {n k nind l} (na:string) (e:cinfo n k nind l)
   (h:within_info l na 0) :cterm n :=
   let l := (lookup_list (ei e) na) in
   match nth_error l 0 with
   | Some x => existc (tRel (decl_type x))
-  | None => todo end.
+  | None => existc (tRel 1000) end.
 Next Obligation.
   assert (nth_error
           ( (lookup_list (ei e) na))
@@ -584,6 +592,17 @@ Next Obligation.
       eapply in_map. auto.
       eapply H2 in H4. auto. auto.
   + inversion H.
+Qed.
+Next Obligation.
+  assert (nth_error
+  ( (lookup_list (ei e) na))
+    0 = None). auto.
+  (* symmetry in H. *)
+  (* unfold lookup_list in Heq_anonymous. *)
+  apply nth_error_None in H.
+  (* rewrite rev_length in Heq_anonymous. *)
+  pose (H5 := lem8989 e na 0 h).
+  lia.
 Qed.
 
 
@@ -629,8 +648,9 @@ Program Definition rels_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l): 
 Next Obligation.
   pose (h0 := lem_lookup_list e na).
   rewrite Forall_forall in h0.
-  pose proof (h0 x xinl). auto.
+  pose proof (h0 _ xinl). auto.
 Qed.
+(* Next Obligation. *)
 
 Lemma lem_within_replace {l str}:
   within_info (replace_add_l l str) str 0.

@@ -26,3 +26,6 @@ examples/induction_principle_proof/test_indp_proof.v
 
 examples/induction_principle_closed/ind_closed.v
 examples/induction_principle_closed/test_ind_closed.v
+
+
+examples/WellScopedProof/baseproof.v
