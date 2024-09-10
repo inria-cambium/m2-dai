@@ -15,53 +15,53 @@ Notation "'try' '$let' ' x ':=' c1 'in' c2 'else' c3" := (@bind _ _ _ _ c1 (fun 
 Notation "a $ b" := (a b) (at level 100, right associativity, only parsing).
 
 Notation " x '<-' c1 ';;' c2" := ( c1 (fun x => c2))
-                                    (at level 100, c1 at next level, right associativity) : monad_scope.
+                                    (at level 100, c1 at next level, right associativity, only parsing) : monad_scope.
 
 
 Axiom todo : forall {A}, A.
 
-Local Definition mkdeclnat a b (n:nat) := mkdecl a b n.
+ Definition mkdeclnat a b (n:nat) := mkdecl a b n.
 
-Local Definition plus_one_index (l: list (BasicAst.context_decl nat)) :=
-  map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)+1)) l.
+ Definition plus_one_index (l: list (BasicAst.context_decl nat)) :=
+  map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (S x.(decl_type))) l.
 
-Local Definition plus_k_index (l: list (BasicAst.context_decl nat)) k :=
+ Definition plus_k_index (l: list (BasicAst.context_decl nat)) k :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)+k)) l.
 
-Local Definition minus_one_index (l: list (BasicAst.context_decl nat)) :=
+ Definition minus_one_index (l: list (BasicAst.context_decl nat)) :=
   map (fun x => mkdeclnat x.(decl_name) x.(decl_body) (x.(decl_type)-1)) l.
 
-Inductive information : Type :=
-| information_list (l : list (BasicAst.context_decl nat))
-| information_nat (n : nat).
+Definition information : Type := list (BasicAst.context_decl nat)
+(* |  (l : list (BasicAst.context_decl nat)) *)
+(* | information_nat (n : nat). *).
 
 Definition lookup_list (l : list (string * information)) (na : string) : list (BasicAst.context_decl nat) :=
   match find (fun i => match i with
                       | (na', _) => String.eqb na na'
               end) l  with
-    Some (_, information_list l) => l
+    Some (_, l) => l
   | _ => []
   end.
 
-Definition lookup_item (l : list (string * information)) (na : string) : nat :=
+(* Definition lookup_item (l : list (string * information)) (na : string) : nat :=
   match find (fun i => match i with
   | (na', _) => String.eqb na na'
   end) l  with
   Some (_, information_nat n) => n
   | _ => todo
-  end.
+  end. *)
 
-Local Fixpoint replace_add_info (info:list (string * information)) (na:string) (item : BasicAst.context_decl nat) :=
+ Fixpoint replace_add_info (info:list (string * information)) (na:string) (item : BasicAst.context_decl nat) :=
   match info with
-  | (s, information_list l0) :: info' =>
-      if String.eqb s na then (s, information_list (item::l0)) :: info'
-      else (s, information_list l0) :: (replace_add_info info' na item)
-  | h :: info' => h :: (replace_add_info info' na item)
-  | [] => (na, information_list [item]) :: []
+  | (s,  l0) :: info' =>
+      if String.eqb s na then (s,  (item::l0)) :: info'
+      else (s,  l0) :: (replace_add_info info' na item)
+  (* | h :: info' => h :: (replace_add_info info' na item) *)
+  | [] => (na,  [item]) :: []
   end.
 
 (*find the index of [x] in the list [l]*)
-Local Definition findi (x:nat) (l:list nat):=
+ Definition findi (x:nat) (l:list nat):=
   let fix Ffix x l n:=
     match l with
     | [] => None
@@ -71,7 +71,7 @@ Local Definition findi (x:nat) (l:list nat):=
   Ffix x l 0.
 
 (*repeat calling a function*)
-Local Fixpoint redo {A} (f:A->A) n a :=
+ Fixpoint redo {A} (f:A->A) n a :=
   match n with
   | 0 => a
   | S n => f (redo f n a) end.
@@ -121,8 +121,8 @@ Record infolocal : Type := mkinfo {
 }.
 
 
-Local Definition add_listinfo e na l :infolocal :=
-  mkinfo e.(renaming) ((na, information_list l)::e.(info)) e.(info_source) e.(kn).
+ Definition add_listinfo e na l :infolocal :=
+  mkinfo e.(renaming) ((na,  l)::e.(info)) e.(info_source) e.(kn).
 
 Definition add_info_names (e:infolocal) (str:string) names : infolocal :=
   let l:= mapi (fun i x => mkdeclnat x None i) names in
@@ -147,18 +147,18 @@ Definition make_initial_info (kn:kername) (ty:mutual_inductive_body) :infolocal 
             []))
       types)
     []
-    [("rels_of_T", information_list (mapi (fun i x => mkdeclnat x None i) types))]
+    [("rels_of_T",  (mapi (fun i x => mkdeclnat x None i) types))]
     kn.
 
 (*The indicator which shows if some new information should be saved
   when new variable introduced *)
 Inductive saveinfo:=
   | Savelist (s:string)
-  | Saveitem (s:string)
+  (* | Saveitem (s:string) *)
   | NoSave.
 
 
-Local Definition lift_renaming t :=
+ Definition lift_renaming t :=
   map (fun t =>
         mkdecl t.(decl_name) t.(decl_body) (lift0 1 t.(decl_type))
   ) t.
@@ -171,21 +171,19 @@ Definition update_kp (na:aname) (e:infolocal) (saveinfo:saveinfo):=
   in
   let info :=
     map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (plus_one_index l))
-      | (na, information_nat n) => (na, information_nat (1 + n)) end
+      fun x => (x.1,  (plus_one_index x.2))
+      (* | (na, information_nat n) => (na, information_nat (1 + n)) end *)
     ) e.(info)
   in
   let info_source :=
     map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (plus_one_index l))
-      | (na, information_nat n) => (na, information_nat (1 + n)) end
+      fun x => (x.1,  (plus_one_index x.2))
+      (* | (na, information_nat n) => (na, information_nat (1 + n)) end *)
     ) e.(info_source)
   in
   match saveinfo with
   | NoSave => mkinfo renaming info info_source e.(kn)
-  | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn)
+  (* | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn) *)
   | Savelist str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
   end
   .
@@ -198,43 +196,40 @@ Definition update_kp_withbody (na:aname) (e:infolocal) (saveinfo:saveinfo) (t:op
   in
   let info :=
     map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (plus_one_index l))
-      | (na, information_nat n) => (na, information_nat (1 + n)) end
+      fun '(na,  l) => (na,  (plus_one_index l))
+      (* | (na, information_nat n) => (na, information_nat (1 + n)) end *)
     ) e.(info)
   in
   let info_source :=
     map (
-      fun x => match x with
-      | (na, information_list l) => (na, information_list (plus_one_index l))
-      | (na, information_nat n) => (na, information_nat (1 + n)) end
+      fun '(na,  l) => (na,  (plus_one_index l))
+      (* | (na, information_nat n) => (na, information_nat (1 + n)) end *)
     ) e.(info_source)
   in
   match saveinfo with
   | NoSave => mkinfo renaming info info_source e.(kn)
-  | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn)
+  (* | Saveitem str => mkinfo renaming ((str, information_nat 0) ::info) info_source e.(kn) *)
   | Savelist str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
   end
   .
 
 
-Local Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
+ Definition update_mk na (e:infolocal) (saveinfo:saveinfo) : infolocal :=
   let info := map (
-    fun x => match x with
-    | (na, information_list l) => (na, information_list (plus_one_index l))
-    | (na, information_nat n) => (na, information_nat (1 + n)) end
+    fun x => (x.1,  (plus_one_index x.2))
+    (* | (na, information_nat n) => (na, information_nat (1 + n)) end *)
   ) e.(info) in
   let renaming := lift_renaming e.(renaming) in
   let item := mkdeclnat na None 0 in
   match saveinfo with
   | NoSave => mkinfo renaming info e.(info_source) e.(kn)
-  | Saveitem str => mkinfo renaming ((str, information_nat 0)::info) e.(info_source) e.(kn)
+  (* | Saveitem str => mkinfo renaming ((str, information_nat 0)::info) e.(info_source) e.(kn) *)
   | Savelist str => mkinfo renaming (replace_add_info info str item) e.(info_source) e.(kn)
   end.
 
 (*return the [i]th element of the [e.(renaming)].
   Only used in mapt currently*)
-Local Definition geti_rename (e:infolocal) (i:nat) :=
+ Definition geti_rename (e:infolocal) (i:nat) :=
   let l := map (fun x => x.(decl_type)) e.(renaming) in
   (nth i l todo).
 
@@ -271,9 +266,9 @@ Definition rels_of (na:string) (e:infolocal) :=
 
 (*return the tRel term of the informationitem named [na] of [e]*)
 Definition rel_of (na:string) (e:infolocal) :=
-  let n := lookup_item e.(info) na in
-  tRel n.
-
+  (* let n := lookup_item e.(info) na in *)
+  (* tRel n. *)
+  geti_info na e 0.
 
 (* In the type definition, (mutual inductive, maybe n different inductive bodies)
    check if the debruijn index [i] refer to a type (being defined),
@@ -487,6 +482,9 @@ Definition mktfixpoint (saveinfo:saveinfo) (names:list aname) (e:infolocal)
     rarg := rarg
   |}.
 
+Definition the_name' :=
+  {| binder_name := nAnon ; binder_relevance := Relevant|}.
+
 Section MktCase.
 
 Definition mktCase (e:infolocal)
@@ -502,11 +500,11 @@ Definition mktCase (e:infolocal)
     let renaming := tl e.(renaming) in
     let info_source := map (
       fun x => match x with
-      | (na, information_list l) => (na, information_list (minus_one_index l))
-      | (na, information_nat n) => (na, information_nat (n - 1)) end
-      ) e.(info_source)
+      | (na,  l) => (na,  (minus_one_index l))
+      (* | (na, information_nat n) => (na, information_nat (n - 1)) end *)
+      end) e.(info_source)
     in
-    let arg := information_nat 0 in
+    let arg :=  [mkdeclnat the_name' None 0] in
     mkinfo (renaming) (("arg_current", arg):: e.(info)) info_source e.(kn)
   in
 
@@ -514,7 +512,7 @@ Definition mktCase (e:infolocal)
   let update_pcontext pcontext e :=
     let e := fold_right (fun na e => update_kp na e NoSave) e pcontext in
     let l:= mapi (fun i x => mkdeclnat x None i) (pcontext) in
-    let info_new := ("pcontext", information_list l) :: e.(info) in
+    let info_new := ("pcontext",  l) :: e.(info) in
     mkinfo e.(renaming) info_new e.(info_source) e.(kn)
   in
   tCase case_info
@@ -566,15 +564,17 @@ Definition map_with_infolocal_arg {X Y:Type} (f:X -> infolocal -> Y) (l:list X)
   let update_ctr_arg_back (e:infolocal) : infolocal :=
     let info_new := map (
       fun x => match x with
-      | (na, information_list l) => x
-      | (na, information_nat n) =>
-          if String.eqb "arg_current" na then (na, information_nat (n + 1))
-          else x end
+      | (na,  l) =>
+      (* | (na, information_nat n) => *)
+          if String.eqb "arg_current" na then
+            (na,  (plus_one_index l))
+          else x
+          end
     ) e.(info) in
     let info_source := map (
       fun x => match x with
-      | (na, information_list l) => (na, information_list (minus_one_index l))
-      | (na, information_nat n) => x end
+      | (na,  l) => (na,  (minus_one_index l))
+      (* | (na, information_nat n) => x end *) end
     ) e.(info_source) in
     mkinfo (tl e.(renaming)) info_new info_source e.(kn)
   in
@@ -641,4 +641,6 @@ Definition check_return_type (t:term) (e:infolocal) : option nat :=
     | _ => None
     end in
   Ffix t e.
+
+Definition Saveitem := Savelist.
 
