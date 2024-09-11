@@ -27,5 +27,8 @@ examples/induction_principle_proof/test_indp_proof.v
 examples/induction_principle_closed/ind_closed.v
 examples/induction_principle_closed/test_ind_closed.v
 
-
+examples/WellScopedProof/api_change.v
+examples/WellScopedProof/indp.v
 examples/WellScopedProof/baseproof.v
+examples/WellScopedProof/proof_indp.v
+examples/WellScopedProof/test_indp.v
