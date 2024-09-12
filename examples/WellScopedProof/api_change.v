@@ -51,3 +51,15 @@ Definition it_mktProd_default' (saveinfo:option string) (e:infolocal) (ctx:conte
 Definition it_mktProd_default (saveinfo:option string) (e:infolocal) (ctx:context)
   (t: infolocal -> term) : term :=
   it_mktProd_default' saveinfo e ctx (fun _ => t).
+
+
+Fixpoint Ffix_findi (l:list nat) (j:nat) (i:nat) :=
+  match l with
+  | k :: l0 => if eqb k i then Some j else Ffix_findi l0 (j+1) i
+  | [] => None
+  end.
+
+
+Definition is_rec_call (e:infolocal) i : option nat:=
+  let l := rev_map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
+  Ffix_findi l 0 i.
