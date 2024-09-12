@@ -52,12 +52,11 @@ Section eprop_.
   Qed.
 
   (** eprop **)
-  Record eprop (n k:nat) (l:list (string * nat)) (e:infolocal) : Prop := mkeprop {
+  Record eprop (n k:nat) (l ls:list (string * nat)) (e:infolocal) : Prop := mkeprop {
     ci : closed_info_n n e;
     ck : k <= #|e.(renaming)|;
-    Pl : Forall2 (fun x y =>
-      x.1 = y.1 /\ #|x.2| >= y.2
-      ) e.(info) l;
+    Pl : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| >= y.2) e.(info) l;
+    Pls : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| = y.2) e.(info_source) ls;
   }.
 
   Fixpoint replace_add_l (l:list (string * nat)) str :=
@@ -80,9 +79,9 @@ Section eprop_.
     | Some str => (str, i) :: l end.
 
 
-  Lemma lem_eprop {n k l} e str :
-    eprop n k l e ->
-    eprop n k (addl l (Some str) 0) (add_emp_info e (Some str)).
+  Lemma lem_eprop {n k l ls} e str :
+    eprop n k l ls e ->
+    eprop n k (addl l (Some str) 0) ls (add_emp_info e (Some str)).
   Proof.
     intro.
     destruct H. destruct e. simpl in ci0, ck0, Pl0.
@@ -91,6 +90,7 @@ Section eprop_.
       simpl. auto.
     + simpl. auto.
     + simpl. constructor. auto. auto.
+    + simpl. auto.
   Qed.
 
 End eprop_.
@@ -105,7 +105,7 @@ Section proof_within_info.
   Definition has_info (l:list (string*nat)) str i :=
     match
       (find (fun x => String.eqb str x.1) l) with
-    | Some (_, k) => i <= k
+    | Some (_, k) => i = k
     | None => False
     end.
 
@@ -154,6 +154,18 @@ Section proof_within_info.
                 (fun x : string × nat =>
                 String.eqb str1 x.1) l) eqn:eq0.
     + rewrite <- H2. destruct p. lia.
+    + auto.
+  Qed.
+
+  Lemma lem_has_info_within2 {str ls nind n}:
+    has_info ls str nind ->
+    within_info ls str n ->
+    n < nind.
+  Proof.
+    unfold has_info.
+    unfold within_info.
+    destruct (find (fun x => String.eqb str x.1) ls).
+    + destruct p.  lia.
     + auto.
   Qed.
 
@@ -348,10 +360,31 @@ Section proof_update.
           +++ eapply IHForall2.
   Qed.
 
+  Lemma lemy01' l l':
+    Forall2
+      (fun (x : string × list (BasicAst.context_decl nat))
+        (y : string × nat) => x.1 = y.1 /\ #|x.2| = y.2) l
+      l' ->
+    Forall2
+      (fun (x : string × list (BasicAst.context_decl nat))
+        (y : string × nat) => x.1 = y.1 /\ #|x.2| = y.2)
+      (map
+        (fun x : string × list (BasicAst.context_decl nat) =>
+          (x.1, plus_one_index x.2)) l) l'.
+  Proof.
+    intro H.
+    induction H.
+      - auto.
+      - simpl. constructor.
+        ++ simpl. rewrite plus_one_index_length. auto.
+        ++ auto.
+  Qed.
+
   (*update*)
-  Lemma lem_update_mk {n k l} na e saveinfo :
-    eprop n k l e -> eprop (S n) k (replace_info_len (saveinfo) l)
-    (update_mk na e (saveinfo) ).
+  Lemma lem_update_mk {n k l ls} na e saveinfo :
+    eprop n k l ls e ->
+    eprop (S n) k (replace_info_len (saveinfo) l) ls
+      (update_mk na e (saveinfo) ).
   Proof.
     intros. destruct H. destruct saveinfo.
     + split.
@@ -361,7 +394,7 @@ Section proof_update.
         apply lem_renaming. auto.
         simpl. simpl in H0. apply lem_info. auto.
       ++ simpl. rewrite <- lift_renaming_length. auto.
-      ++ simpl. apply lemx01. auto.
+      ++ simpl. apply lemx01. auto. ++ auto.
     + split.
       ++ destruct ci0.
         unfold update_mk. destruct e. simpl.
@@ -369,11 +402,13 @@ Section proof_update.
         apply lem_renaming. auto.
         simpl. simpl in H0. apply lem_info0. auto.
       ++ simpl. rewrite <- lift_renaming_length. auto.
-      ++ simpl. apply lemy01. auto.
+      ++ simpl. apply lemy01. auto. ++ auto.
   Qed.
 
-  Lemma lem_update_kp {n k l} na e saveinfo :
-    eprop n k l e -> eprop (S n) (S k) (replace_info_len ( saveinfo) l) (update_kp na e (saveinfo) ).
+  Lemma lem_update_kp {n k l ls} na e saveinfo :
+    eprop n k l ls e ->
+    eprop (S n) (S k) (replace_info_len ( saveinfo) l) ls
+      (update_kp na e (saveinfo) ).
   Proof.
     intros. destruct H. destruct saveinfo.
     + split.
@@ -384,6 +419,7 @@ Section proof_update.
           simpl. simpl in H0. apply lem_info. auto.
       ++ simpl. rewrite <- lift_renaming_length. lia.
       ++ simpl. apply lemx01. auto.
+      ++ unfold update_kp. simpl. eapply lemy01'. auto.
     + split.
     ++ destruct ci0.
         unfold update_mk. destruct e. simpl.
@@ -392,6 +428,7 @@ Section proof_update.
         simpl. simpl in H0. apply lem_info0. auto.
     ++ simpl. rewrite <- lift_renaming_length. lia.
     ++ simpl. apply lemy01. auto.
+    ++ unfold update_kp. simpl. eapply lemy01'. auto.
   Qed.
 
 End proof_update.
@@ -400,10 +437,10 @@ End proof_update.
 Section proof_tProd.
 
   (*mktProd*)
-  Lemma lem_mktProd {n k l} saveinfo e na t1 t2 :
-    eprop n k l e ->
+  Lemma lem_mktProd {n k l ls} saveinfo e na t1 t2 :
+    eprop n k l ls e ->
     closedn n t1 ->
-    (forall e0, eprop (S n) k (replace_info_len (saveinfo) l) e0 -> closedn (S n) (t2 e0))
+    (forall e0, eprop (S n) k (replace_info_len (saveinfo) l) ls e0 -> closedn (S n) (t2 e0))
     -> closedn n (mktProd (saveinfo) e na t1 t2).
   Proof.
     intros.
@@ -416,10 +453,10 @@ Section proof_tProd.
   Qed.
 
   (*kptProd*)
-  Lemma lem_kptProd {n k l} saveinfo e na t1 t2 :
-    eprop n k l e ->
+  Lemma lem_kptProd {n k l ls} saveinfo e na t1 t2 :
+    eprop n k l ls e ->
     closedn n t1 ->
-    (forall e0, eprop (S n) (S k) (replace_info_len (saveinfo) l) e0 -> closedn (S n) (t2 e0))
+    (forall e0, eprop (S n) (S k) (replace_info_len (saveinfo) l) ls e0 -> closedn (S n) (t2 e0))
     -> closedn n (kptProd (saveinfo) e na t1 t2).
   Proof.
     intros.
@@ -436,8 +473,8 @@ End proof_tProd.
 
 Section proof_rels_of.
 
-  Lemma lem_lookup_list {n k l} e (str:string):
-    eprop n k l e ->
+  Lemma lem_lookup_list {n k l ls} e (str:string):
+    eprop n k l ls e ->
     Forall (fun x => Nat.ltb (decl_type x) n) ((lookup_list (e.(info)) str)).
   Proof.
     intro.
@@ -505,12 +542,12 @@ Section proof_rels_of.
         exists x. exists x0. right. auto.
   Qed.
 
-  Lemma lem_rels_of {n k l} e na:
-    eprop n k l e ->
+  Lemma lem_rels_of {n k l ls} e na:
+    eprop n k l ls e ->
     Forall (fun t => closedn n t) (rels_of na e).
   Proof.
     intro.
-    pose (h0 := @lem_lookup_list n k l e na H).
+    pose (h0 := @lem_lookup_list n k l _ e na H).
     rewrite Forall_forall in h0.
     unfold rels_of. rewrite rev_map_spec.
     apply Forall_forall.
@@ -531,8 +568,8 @@ End proof_rels_of.
 
 Section proof_geti_info.
 
-  Lemma lem8989 {n k l} e (str:string) (i:nat):
-    eprop n k l e ->
+  Lemma lem8989 {n k l ls} e (str:string) (i:nat):
+    eprop n k l ls e ->
     within_info l str i -> i < #|lookup_list (info e) str|.
   Proof.
     intro.
@@ -552,8 +589,8 @@ Section proof_geti_info.
       + simpl in IHPl0. auto.
   Qed.
 
-  Lemma lem_geti_info {n k l} e na i :
-    eprop n k l e ->
+  Lemma lem_geti_info {n k l ls} e na i :
+    eprop n k l ls e ->
     within_info l na i ->
     closedn n (geti_info na e i).
   Proof.
@@ -603,8 +640,8 @@ Section proof_geti_info.
     + intros. simpl. left. auto.
   Qed.
 
-  Lemma lem_get_info_last {n k l} e na :
-    eprop n k l e ->
+  Lemma lem_get_info_last {n k l ls} e na :
+    eprop n k l ls e ->
     within_info l na 0 ->
     closedn n (get_info_last na e).
   Proof.
@@ -618,8 +655,8 @@ Section proof_geti_info.
     eapply in_hd. auto.
   Qed.
 
-  Lemma lem_rel_of {n k l} e na :
-    eprop n k l e ->
+  Lemma lem_rel_of {n k l ls} e na :
+    eprop n k l ls e ->
     within_info l na 0 ->
     closedn n (rel_of na e).
   Proof.
@@ -631,8 +668,8 @@ End proof_geti_info.
 
 Section proof_mapt.
 
-  Lemma lem_geti_rename {n k l} e i:
-    eprop n k l e ->
+  Lemma lem_geti_rename {n k l ls} e i:
+    eprop n k l ls e ->
     i < k -> closedn n (geti_rename e i).
   Proof.
     intros.
@@ -649,9 +686,9 @@ Section proof_mapt.
       + auto.
   Qed.
 
-  Lemma lem_fold_right_update {n k l} e ctx:
-    eprop n k l e ->
-    eprop (n + #|ctx|) (k + #|ctx|) l
+  Lemma lem_fold_right_update {n k l ls} e ctx:
+    eprop n k l ls e ->
+    eprop (n + #|ctx|) (k + #|ctx|) l ls
     (fold_right
       (fun na e => update_kp na e NoSave) e ctx).
   Proof.
@@ -666,7 +703,7 @@ Section proof_mapt.
       assert (l = replace_info_len NoSave l); auto.
       rewrite H0, H1, H2.
       change (
-        eprop (S (n + #|ctx|)) (S (k + #|ctx|)) (replace_info_len NoSave l)
+        eprop (S (n + #|ctx|)) (S (k + #|ctx|)) (replace_info_len NoSave l) ls
           (update_kp a (fold_right (fun na e0 => update_kp na e0 NoSave) e ctx) NoSave)
       ).
       eapply lem_update_kp.
@@ -674,9 +711,9 @@ Section proof_mapt.
       auto.
   Qed.
 
-  Lemma lem_fold_left_update {n k l} e (defs:list (def term)):
-    eprop n k l e ->
-    eprop (n + #|defs|) (k + #|defs|) l
+  Lemma lem_fold_left_update {n k l ls} e (defs:list (def term)):
+    eprop n k l ls e ->
+    eprop (n + #|defs|) (k + #|defs|) l ls
     (fold_left
       (fun e d => update_kp d.(dname) e NoSave) defs e).
   Proof.
@@ -691,7 +728,7 @@ Section proof_mapt.
       assert (l = replace_info_len NoSave l); auto.
       rewrite H0, H1, H2.
       change (
-        eprop (S n + #|defs|) (S k + #|defs|) (replace_info_len NoSave l)
+        eprop (S n + #|defs|) (S k + #|defs|) (replace_info_len NoSave l) ls
          (fold_left (fun e d => update_kp d.(dname) e NoSave)
             defs (update_kp a.(dname) e NoSave))
       ).
@@ -700,8 +737,8 @@ Section proof_mapt.
       auto.
   Qed.
 
-  Lemma lem_mapt {n k l} e t:
-    eprop n k l e ->
+  Lemma lem_mapt {n k l ls} e t:
+    eprop n k l ls e ->
     closedn k t ->
     closedn n (mapt e t).
   Proof.
@@ -1058,10 +1095,10 @@ Section proof_it_tProd.
         -- simpl. unfold within_info. simpl. rewrite e1. auto.
   Qed.
 
-  Lemma lemma_it_kptProd {n k l} e na params t2:
-    eprop n k l e ->
+  Lemma lemma_it_kptProd {n k l ls} e na params t2:
+    eprop n k l ls e ->
     Is_closed_context k params ->
-    (forall e0, eprop (n + #|params|) (k + #|params|) (addl l (Some na) #|params|) e0 -> closedn (n + #|params|) (t2 e0)) ->
+    (forall e0, eprop (n + #|params|) (k + #|params|) (addl l (Some na) #|params|) ls e0 -> closedn (n + #|params|) (t2 e0)) ->
     closedn n (it_kptProd_default (Some na) e params t2).
   Proof.
     intros. unfold it_kptProd_default.
@@ -1082,6 +1119,7 @@ Section proof_it_tProd.
           constructor. auto. auto.
       - simpl. auto.
       - simpl. constructor. auto. auto.
+      - auto.
     +
       intros.
       (* unfold it_kptProd_default. *)
@@ -1122,12 +1160,12 @@ Section proof_it_tProd.
       end in
     Ffix ctx e e (fun _ => t). *)
 
-  Lemma lemma_it_mktProd' {n k l} e na ctx t2:
-    eprop n k l e ->
+  Lemma lemma_it_mktProd' {n k l ls} e na ctx t2:
+    eprop n k l ls e ->
     Is_closed_context k ctx ->
     (forall e0' e0,
-      eprop (n + #|ctx|) (k + #|ctx|) (addl l (Some na) #|ctx|) e0' ->
-      eprop (n + #|ctx|) (k) (addl l (Some na) #|ctx|) e0 ->
+      eprop (n + #|ctx|) (k + #|ctx|) (addl l (Some na) #|ctx|) ls e0' ->
+      eprop (n + #|ctx|) (k) (addl l (Some na) #|ctx|) ls e0 ->
       closedn (n + #|ctx|) (t2 e0' e0)
       ) ->
     closedn n (it_mktProd_default' (Some na) e ctx t2).
@@ -1147,6 +1185,7 @@ Section proof_it_tProd.
           -- destruct e. simpl. simpl in H2. auto.
         ++ simpl. lia.
         ++ simpl. constructor. auto. auto.
+        ++ auto.
       - destruct H.
         split.
         ++ destruct ci0. split.
@@ -1154,6 +1193,7 @@ Section proof_it_tProd.
           -- destruct e. simpl in H2. simpl. auto.
         ++ simpl. auto.
         ++ simpl. constructor. auto. auto.
+        ++ auto.
     +
       intros.
       eapply IHctx.
@@ -1187,11 +1227,11 @@ Section proof_it_tProd.
               eapply lem_update_mk. simpl in H2. auto.
   Qed.
 
-  Lemma lemma_it_mktProd {n k l} e na ctx t2:
-    eprop n k l e ->
+  Lemma lemma_it_mktProd {n k l ls} e na ctx t2:
+    eprop n k l ls e ->
     Is_closed_context k ctx ->
     (forall e0,
-      eprop (n + #|ctx|) (k) (addl l (Some na) #|ctx|) e0 ->
+      eprop (n + #|ctx|) (k) (addl l (Some na) #|ctx|) ls e0 ->
       closedn (n + #|ctx|) (t2 e0)
       ) ->
     closedn n (it_mktProd_default (Some na) e ctx t2).
@@ -1234,7 +1274,7 @@ Section proof_make_initial_info.
   Qed.
 
   Lemma lem_initial : forall kn ty, Is_closed_mutual_ind_body ty ->
-    eprop 0 #|ty.(ind_bodies)| [] (make_initial_info kn ty).
+    eprop 0 #|ty.(ind_bodies)| [] [("rels_of_T", #|ty.(ind_bodies)|)] (make_initial_info kn ty).
   Proof.
     intros. destruct ty. simpl.
     destruct H as [H1 H2]. clear H1 H2.
@@ -1254,6 +1294,76 @@ Section proof_make_initial_info.
     + unfold make_initial_info.
       simpl. rewrite mapi_length. rewrite map_length. auto.
     + auto.
+    + unfold make_initial_info. simpl.
+      constructor. split.
+      ++ simpl. auto.
+      ++ simpl. rewrite mapi_length. rewrite map_length. auto.
+      ++ auto.
   Qed.
 
 End proof_make_initial_info.
+
+Section proof_is_rec_call.
+
+  Lemma lemma_Ffix_findi l j i q:
+    Ffix_findi l j i = Some q -> q < #|l| + j.
+  Proof.
+    revert j i q.
+    induction l.
+    + simpl. intros. inversion H.
+    + intros. simpl.
+      simpl in H.
+      destruct (eqb a i).
+      ++ inversion H. simpl. lia.
+      ++ specialize (IHl _ _ _ H). lia.
+  Qed.
+
+  Lemma lem_is_rec_call {n k l ls} e i j:
+    eprop n k l ls e ->
+    is_rec_call e i = Some j ->
+    within_info ls "rels_of_T" j.
+  Proof.
+    intros.
+    (* Print is_rec_call. *)
+    unfold is_rec_call in H0.
+    eapply lemma_Ffix_findi in H0.
+    rewrite rev_map_length in H0.
+    destruct H as [_ _ _ Pls].
+    induction Pls.
+    + auto.
+    + unfold within_info.
+      destruct (String.eqb "rels_of_T" y.1) eqn:eq0.
+      ++ unfold find. rewrite eq0. destruct H.
+         destruct x.
+         destruct y. simpl in H, H1.
+          unfold lookup_list in H0.
+          unfold find in H0.
+          rewrite <- H in eq0.
+          assert ((t, n0).1 = t). auto.
+          rewrite H2 in eq0.
+          rewrite eq0 in H0.
+          lia.
+      ++ unfold find. rewrite eq0.
+          change (
+            match
+            (find
+              (fun x0 => String.eqb "rels_of_T" x0.1)
+              l')
+            with
+            | Some p =>
+                let (_, n0) := p in j < n0
+            | None => j < 0
+            end
+          ).
+          destruct H. destruct x.
+          unfold lookup_list in H0.
+          unfold find in H0.
+          rewrite <- H in eq0.
+          assert ((t, l1).1 = t). auto.
+          rewrite H2 in eq0.
+          rewrite eq0 in H0.
+          apply IHPls in H0.
+          auto.
+  Qed.
+
+End proof_is_rec_call.
