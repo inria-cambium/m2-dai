@@ -19,6 +19,28 @@ Fixpoint n_tl {A} (l:list A) n :=
   end
 .
 
+Fixpoint aux_nested (params:context) e t1 :=
+  match t1 with
+  | tProd na ta tb =>
+    kptProd (Savelist "arglambda") e na
+      (mapt e ta) (fun e => aux_nested params e tb)
+  | tRel i =>
+    match is_rec_call e i with
+    | None => mapt e t1
+    | Some kk =>
+      tApp (geti_info "P" e kk)
+        [tApp (get_info_last "args" e) (rels_of "arglambda" e)]
+    end
+  | tApp (tRel i) tl =>
+    match is_rec_call e i with
+    | None => mapt e t1
+    | Some kk =>
+      tApp (geti_info "P" e kk)
+        (let tl := n_tl tl #|params| in
+          (map (mapt e) tl) ++
+          [tApp (get_info_last "args" e) (rels_of "arglambda" e)])
+    end
+  | _ => mapt e t1 end .
 
 Definition auxarg arg kn (params:context) (t:infolocal -> term) :infolocal -> term :=
   let t1 := arg.(decl_type) in
@@ -61,9 +83,12 @@ Definition auxarg arg kn (params:context) (t:infolocal -> term) :infolocal -> te
       end
     (**********************)
     | tProd na _ _ =>
-      kptProd (Savelist "args") e na
-        (mapt e t1)
-        t
+      match check_return_type t1 e with
+      | None => kptProd (Savelist "args") e na ( mapt e t1) t
+      | Some _ =>
+        mktProd (Savelist "args") e na (mapt e t1)
+          (fun e => kptProd NoSave e the_name (aux_nested params (add_emp_info e (Some "arglambda")) t1) t)
+       end
     (**********************)
     | _ => kptProd (Savelist "args") e na
             (mapt e t1)

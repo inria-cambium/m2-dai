@@ -119,17 +119,61 @@ Section proof_within_info.
       String.eqb s1 x.1)
       (replace_add_l l s2).
   Proof.
-  intros.
-  induction l.
-  + simpl. rewrite H. auto.
-  + simpl. destruct a. simpl.
-    destruct (String.eqb s1 t) eqn:eq1.
-    - destruct (String.eqb t s2) eqn:eq2.
-      ++ apply lemstr in eq1. rewrite <- eq1 in eq2. rewrite H in eq2. inversion eq2.
-      ++ simpl. rewrite eq1. auto.
-    - destruct (String.eqb t s2) eqn:eq2.
-      ++ simpl. rewrite eq1. auto.
-      ++ simpl. rewrite eq1. auto.
+    intros.
+    induction l.
+    + simpl. rewrite H. auto.
+    + simpl. destruct a. simpl.
+      destruct (String.eqb s1 t) eqn:eq1.
+      - destruct (String.eqb t s2) eqn:eq2.
+        ++ apply lemstr in eq1. rewrite <- eq1 in eq2. rewrite H in eq2. inversion eq2.
+        ++ simpl. rewrite eq1. auto.
+      - destruct (String.eqb t s2) eqn:eq2.
+        ++ simpl. rewrite eq1. auto.
+        ++ simpl. rewrite eq1. auto.
+  Qed.
+
+  Lemma lem002 {s1 s2 n} l : String.eqb s1 s2 = false ->
+    find
+      (fun x : string × nat =>
+      String.eqb s1 x.1) l
+    =
+    find
+      (fun x : string × nat =>
+      String.eqb s1 x.1)
+      (addl l (Some s2) n).
+  Proof.
+    intros.
+    induction l.
+    + simpl. rewrite H. auto.
+    + simpl. destruct a. simpl.
+      destruct (String.eqb s1 t) eqn:eq1.
+      - destruct (String.eqb t s2) eqn:eq2.
+        ++ apply lemstr in eq1. rewrite <- eq1 in eq2. rewrite H in eq2. inversion eq2.
+        ++ apply lemstr in eq1. rewrite <- eq1 in eq2. rewrite eq2. auto.
+      - destruct (String.eqb t s2) eqn:eq2.
+        ++ simpl. apply lemstr in eq2. rewrite eq2 in eq1. rewrite eq1. auto.
+      ++ simpl. rewrite H. auto.
+  Qed.
+
+  Lemma lem_within_info l str n str2 n2:
+    String.eqb str str2 = false ->
+    within_info l str n ->
+    within_info (addl l (Some str2) n2)  str n.
+    Proof.
+    intro HF.
+    unfold within_info.
+    pose (H :=  @lem002 str str2 n2 l HF).
+    rewrite H. intro. auto.
+  Qed.
+
+  Lemma lem_has_info l str n str2 :
+    String.eqb str str2 = false ->
+    has_info l str n ->
+    has_info (replace_add_l l str2) str n .
+    Proof.
+    intro.
+    unfold has_info.
+    pose (H' := @lem001 str str2 l). rewrite H'. auto. auto.
   Qed.
 
   Lemma lem_has_info_within0 {l nind str j}: j < nind -> has_info l str nind -> within_info l str j.

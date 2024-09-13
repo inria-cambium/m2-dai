@@ -19,9 +19,142 @@ Lemma lem_ntl1 {A} (n:nat) (t:A) (tl:list A) : In t (n_tl tl n) -> In t tl.
   exact (IHn H0).
 Qed.
 
+(*only used for tProd term, other case is trivial*)
+Lemma term_ind_simpl :
+    forall P : term -> Prop,
+       (forall n : nat, P (tRel n)) ->
+       (forall id : ident, P (tVar id)) ->
+       (forall (ev : nat) (args : list term), P (tEvar ev args)) ->
+       (forall s : sort, P (tSort s)) ->
+       (forall t : term,
+        P t ->
+        forall (kind : cast_kind) (v : term), P v -> P (tCast t kind v)) ->
+      (forall (n : aname) (t : term),
+        P t -> forall t0 : term, P t0 -> P (tProd n t t0)) ->
+       (forall (na : aname) (ty : term),
+        P ty -> forall body : term, P body -> P (tLambda na ty body)) ->
+       (forall (na : aname) (def : term),
+        P def ->
+        forall def_ty : term,
+        P def_ty ->
+        forall body : term, P body -> P (tLetIn na def def_ty body)) ->
+       (forall f : term, P f -> forall args : list term, P (tApp f args)) ->
+       (forall (c : kername) (u : Instance.t), P (tConst c u)) ->
+       (forall (ind : inductive) (u : Instance.t), P (tInd ind u)) ->
+       (forall (ind : inductive) (idx : nat) (u : Instance.t),
+        P (tConstruct ind idx u)) ->
+       (forall (ci : case_info) (type_info : predicate term) (discr : term),
+        P discr ->
+        forall branches : list (branch term),
+        P (tCase ci type_info discr branches)) ->
+       (forall (proj : projection) (t : term), P t -> P (tProj proj t)) ->
+       (forall (mfix : mfixpoint term) (idx : nat), P (tFix mfix idx)) ->
+       (forall (mfix : mfixpoint term) (idx : nat), P (tCoFix mfix idx)) ->
+       (forall i : PrimInt63.int, P (tInt i)) ->
+       (forall f : PrimFloat.float, P (tFloat f)) ->
+       (forall (u : Level.t) (arr : list term) (default : term),
+        P default ->
+        forall type : term, P type -> P (tArray u arr default type)) ->
+       forall t : term, P t.
+Proof.
+  intros.
+  induction t. all:auto.
+Qed.
+
+Lemma lem_aux_nested {n k l ls nind} params narg e t1 :
+  has_info l "P" nind ->
+  has_info ls "rels_of_T" nind ->
+  within_info l "args" 0 ->
+  eprop n k (addl l (Some "arglambda") narg) ls e ->
+  closedn k t1 ->
+  closedn n (aux_nested params e t1).
+Proof.
+  revert t1 n narg k e.
+  induction t1 using term_ind_simpl.
+  + intros.
+    simpl. destruct (is_rec_call e n) eqn:eq0.
+    ++ eapply lem_is_rec_call in eq0. 2:exact H2.
+      apply andb_and. split.
+      - eapply lem_geti_info. exact H2. auto.
+        pose (H' := lem_has_info_within2 H0 eq0).
+        eapply lem_has_info_within0. exact H'. auto.
+      - apply forallb_Forall. constructor. 2:auto.
+        eapply andb_and. split.
+        -- eapply lem_get_info_last. exact H2.
+            eapply lem_within_info. auto. auto.
+        -- apply forallb_Forall. eapply lem_rels_of. exact H2.
+    ++ eapply lem_geti_rename. 1:exact H2. simpl in H3.
+      apply Compare_dec.leb_complete in H3. auto.
+  + intros; simpl; auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. inversion H3. apply andb_and in H5. destruct H5.
+    change (closedn n0 (
+      kptProd (Savelist "arglambda") e n
+       (mapt e t1_1) (fun e => aux_nested params e t1_2)
+    )).
+    eapply lem_kptProd.
+    exact H2. eapply lem_mapt. exact H2. auto.
+    intros. eapply IHt1_2. auto. auto. auto. 2:exact H5.
+    simpl in H6. exact H6.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros.
+    unfold aux_nested.
+    destruct t1.
+    destruct (is_rec_call e n0) eqn:eq0.
+    ++ eapply lem_is_rec_call in eq0. 2:exact H2.
+      apply andb_and. split.
+      - eapply lem_geti_info. exact H2. auto.
+        pose (H' := lem_has_info_within2 H0 eq0).
+        eapply lem_has_info_within0. exact H'. auto.
+      - apply forallb_Forall. apply Forall_app. split.
+        fold closedn.
+        eapply Forall_map.
+        simpl in H3. apply andb_and in H3. destruct H3.
+        eapply forallb_Forall in H4. apply Forall_forall.
+        intros. eapply lem_mapt. exact H2.
+        apply lem_ntl1 in H5.
+        rewrite Forall_forall in H4. auto.
+        fold closedn. constructor. 2:auto.
+        eapply andb_and. split.
+        -- eapply lem_get_info_last. exact H2.
+            eapply lem_within_info. auto. auto.
+        -- apply forallb_Forall. eapply lem_rels_of. exact H2.
+    ++ eapply lem_mapt. 1:exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+    ++ eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+  + intros. unfold aux_nested. eapply lem_mapt. exact H2. auto.
+Qed.
+
 Lemma lem_auxarg {n k l ls nind} arg kn (params:context) (t:infolocal -> term) e:
   closedn k (decl_type arg) ->
-  (* True -> *)
   (forall n', forall e', eprop n' (S k) (replace_info_len (Savelist "args") l) ls e' -> closedn n' (t e')) ->
   eprop n k l ls e ->
   has_info l "P" nind ->
@@ -40,7 +173,6 @@ Proof.
           apply andb_and. split. eapply lem_geti_info. exact H0. eapply lem_has_info_within1. 2:auto. 2: exact H4.
           eapply (lem_is_rec_call e _ _ H3) in HH.
           eapply (lem_has_info_within2 H4' _).
-          (* auto. *)
           apply forallb_Forall. constructor. 2:auto.
           eapply lem_get_info_last. exact H0. eapply lem_within_replace.
         - intros. eapply H2. auto.
@@ -51,7 +183,17 @@ Proof.
   + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
   + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
   + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
-  + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
+  + destruct (check_return_type (tProd na arg1 arg2) e).
+    ++ eapply lem_mktProd. exact H3.
+        eapply lem_mapt. exact H3. auto.
+        intros.
+        eapply lem_kptProd. exact H0. 2: auto.
+        eapply lem_aux_nested. 5:exact H.
+      2 : exact H4'.
+      2:exact (@lem_within_replace l "args").
+      eapply lem_has_info. auto. auto.
+      eapply lem_eprop. auto.
+    ++ refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
   + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
   + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
   + destruct arg. pose (H' := lem_app_closed H).
@@ -66,14 +208,12 @@ Proof.
               apply andb_and. split. eapply lem_geti_info. exact H0. eapply lem_has_info_within1. 3:exact H4. 2:auto.
               eapply (lem_is_rec_call e _ _ H3) in eq0.
               eapply (lem_has_info_within2 H4' eq0).
-
               apply forallb_Forall. apply app_Forall.
               --- apply Forall_map. apply Forall_forall. intros.
                   eapply lem_mapt. exact H0. eapply H'.
                   eapply lem_ntl1. exact H1.
               --- constructor. 2:auto. eapply lem_get_info_last. exact H0. apply lem_within_replace.
           +++ intros. apply H2. auto.
-
         - refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
     ++ refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
     ++ refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
@@ -105,6 +245,7 @@ Proof.
   + refine (lem_kptProd _ _ _ _ _ H3 (lem_mapt _ _ H3 H) (H2 _)).
   Unshelve. auto.
 Qed.
+
 
 Lemma lem_transformer_result {n k l ls nind}
   cstrindices constructor_current i_ind e :
