@@ -1,7 +1,6 @@
 Require Import MetaCoq.Programming.
 Require Import WellScopedProof.api_change.
-Global Open Scope bs.
-Import Lia.
+Import Lia List ListNotations.
 
 
 Lemma lemstr: forall s1 s2 :string, String.eqb s1 s2 = true <-> s1 = s2.
@@ -24,6 +23,50 @@ Proof.
   apply forallb_Forall in H1.
   eapply Forall_forall in H1. 2:exact H0. auto.
 Qed.
+
+Lemma lem_tApp {n t tl} :
+  closedn n t ->
+  Forall (closedn n) tl ->
+  closedn n (tApp t tl).
+Proof.
+  intros.
+  simpl. apply andb_and.
+  split. auto. apply forallb_Forall. auto.
+Qed.
+
+
+Section proof_SeperateParams.
+
+  Lemma lem_skipn_firstn {A} (l:list A) n:
+    List.app (firstn n l) (skipn n l)  = l.
+  Proof.
+    revert n.
+    induction l.
+    + intros.
+      destruct n. auto.
+      auto.
+    + intros.
+      destruct n. auto.
+      simpl.
+      specialize (IHl n).
+      rewrite IHl. auto.
+  Qed.
+
+  Lemma lem_seperateparams kn ty :
+    let '(l1 , l2) := SeperateParams kn ty in
+    ty.(ind_params) = List.app l2 l1.
+  Proof.
+    unfold SeperateParams.
+    destruct ((fix Ffix (l : list bool) (n : nat) {struct l} : option nat :=
+      match l with
+      | [] => None
+      | y :: l' => if negb y then Some n else Ffix l' (n + 1)
+      end) (CheckUniformParam kn ty) 0).
+    + symmetry. eapply lem_skipn_firstn.
+    + auto.
+  Qed.
+
+End proof_SeperateParams.
 
 
 Section eprop_.
@@ -78,7 +121,6 @@ Section eprop_.
     | None => l
     | Some str => (str, i) :: l end.
 
-
   Lemma lem_eprop {n k l ls} e str :
     eprop n k l ls e ->
     eprop n k (addl l (Some str) 0) ls (add_emp_info e (Some str)).
@@ -94,6 +136,7 @@ Section eprop_.
   Qed.
 
 End eprop_.
+
 
 Section proof_within_info.
 
@@ -1114,6 +1157,43 @@ Section Is_closed.
   Definition no_empty_bodies ty :=
     #|ty.(ind_bodies)| > 0.
 
+  Lemma lem_is_closed_context n a l :
+    Is_closed_context n (a :: l) ->
+    Is_closed_context n l.
+  Proof.
+    induction l.
+    + intros. constructor.
+    + intros.
+      inversion H. auto.
+  Qed.
+
+  Lemma lem_is_closed_context2 n l0 l :
+    Is_closed_context n (l0 ++ l) ->
+    Is_closed_context n l.
+  Proof.
+    revert l. induction l0.
+    + intros. simpl in H. auto.
+    + intros.
+      eapply IHl0.
+      rewrite <- app_comm_cons in H.
+      eapply lem_is_closed_context. exact H.
+  Qed.
+
+  Lemma lem_is_closed_context3 n l0 l :
+    Is_closed_context n (l0 ++ l) ->
+    Is_closed_context (n + #|l|) l0.
+  Proof.
+    revert l. induction l0.
+    + intros. constructor.
+    + intros. constructor.
+      rewrite <- app_comm_cons in H.
+      inversion H. auto.
+      inversion H.
+      assert (n + #|l| + #|l0| = n + #|l0 ++ l|).
+      rewrite app_length.
+      lia. rewrite H5. auto.
+  Qed.
+
 End Is_closed.
 
 
@@ -1411,3 +1491,46 @@ Section proof_is_rec_call.
   Qed.
 
 End proof_is_rec_call.
+
+
+(*only used for tProd term, other case is trivial*)
+Lemma term_ind_simpl :
+    forall P : term -> Prop,
+       (forall n : nat, P (tRel n)) ->
+       (forall id : ident, P (tVar id)) ->
+       (forall (ev : nat) (args : list term), P (tEvar ev args)) ->
+       (forall s : sort, P (tSort s)) ->
+       (forall t : term,
+        P t ->
+        forall (kind : cast_kind) (v : term), P v -> P (tCast t kind v)) ->
+      (forall (n : aname) (t : term),
+        P t -> forall t0 : term, P t0 -> P (tProd n t t0)) ->
+       (forall (na : aname) (ty : term),
+        P ty -> forall body : term, P body -> P (tLambda na ty body)) ->
+       (forall (na : aname) (def : term),
+        P def ->
+        forall def_ty : term,
+        P def_ty ->
+        forall body : term, P body -> P (tLetIn na def def_ty body)) ->
+       (forall f : term, P f -> forall args : list term, P (tApp f args)) ->
+       (forall (c : kername) (u : Instance.t), P (tConst c u)) ->
+       (forall (ind : inductive) (u : Instance.t), P (tInd ind u)) ->
+       (forall (ind : inductive) (idx : nat) (u : Instance.t),
+        P (tConstruct ind idx u)) ->
+       (forall (ci : case_info) (type_info : predicate term) (discr : term),
+        P discr ->
+        forall branches : list (branch term),
+        P (tCase ci type_info discr branches)) ->
+       (forall (proj : projection) (t : term), P t -> P (tProj proj t)) ->
+       (forall (mfix : mfixpoint term) (idx : nat), P (tFix mfix idx)) ->
+       (forall (mfix : mfixpoint term) (idx : nat), P (tCoFix mfix idx)) ->
+       (forall i : PrimInt63.int, P (tInt i)) ->
+       (forall f : PrimFloat.float, P (tFloat f)) ->
+       (forall (u : Level.t) (arr : list term) (default : term),
+        P default ->
+        forall type : term, P type -> P (tArray u arr default type)) ->
+       forall t : term, P t.
+Proof.
+  intros.
+  induction t. all:auto.
+Qed.

@@ -66,8 +66,30 @@ MetaCoq Run Derive InductivePrinciple Point as "indp_point".
 Print indp_point.
 
 
+(*lambda-type-arg*)
 Inductive myterm2 (A B:Type) : Type :=
   | myvar : nat -> myterm2 A B
   | mylam : (nat -> myterm2 A B) -> myterm2 A B.
 MetaCoq Run Derive InductivePrinciple myterm2 as "indp_myterm2".
 Print indp_myterm2.
+
+
+(* le defined with two indices *)
+Inductive le: nat -> nat -> Type :=
+| le_refl n : le n n
+| le_S n m : le (S n) m -> le n m.
+MetaCoq Run Derive InductivePrinciple le as "indp_le".
+Print indp_le.
+
+(* le defined with one non-uniform parameter and one index *)
+Inductive le' (n: nat): nat -> Type :=
+| le_refl' : le' n n
+| le_S' m : le' (S n) m -> le' n m.
+MetaCoq Run Derive InductivePrinciple le' as "indp_le'".
+Print indp_le'.
+
+
+Inductive Acc (A : Type) (R : A -> A -> Prop) (x : A) : Type :=
+	Acc_intro : (forall y : A, R y x -> Acc A R y) -> Acc A R x.
+MetaCoq Run Derive InductivePrinciple Acc as "indp_acc".
+Print indp_acc.

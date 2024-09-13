@@ -4,8 +4,6 @@ Global Open Scope bs.
 
 (*
   derive the type of induction principle of any inductive type
-    - can handle mutual inductive type
-    - cannot handle lambda-type-argument, (will derive a naive indp)
 *)
 
 
@@ -97,11 +95,12 @@ Definition auxarg arg kn (params:context) (t:infolocal -> term) :infolocal -> te
 
 Definition transformer_result cstrindices constructor_current i_ind :infolocal -> term := fun e =>
   tApp (geti_info "P" e i_ind)
-    (
+    ( rels_of "no_uniform_params" e
+      ++
       (map (mapt e) cstrindices)
       ++
       [tApp constructor_current
-        (rels_of "params" e ++ rels_of "args" e)]
+        (rels_of "params" e  ++ rels_of "no_uniform_params" e ++ rels_of "args" e)]
     ).
 
 Fixpoint Ffix_args kn params args t :=
@@ -115,46 +114,47 @@ Definition auxctr (i:nat) (ctr:constructor_body) kn params i_ind : infolocal -> 
                           inductive_ind := i_ind  |} in
   let constructor_current := tConstruct the_inductive i [] in
   let cstr_type := ctr.(cstr_type) in
-  Ffix_args kn params ctr.(cstr_args)
-    (transformer_result ctr.(cstr_indices) constructor_current i_ind).
+    (Ffix_args kn params ctr.(cstr_args)
+      (transformer_result ctr.(cstr_indices) constructor_current i_ind)).
 
-Fixpoint Ffix_ctrs' i kn params i_ind b t : infolocal -> term := fun e =>
+Fixpoint Ffix_ctrs' no_uniform_params i kn params i_ind b t : infolocal -> term := fun e =>
   match b with
   | [] => t e
   | a :: b' =>
     mktProd NoSave e the_name
-     (auxctr i a kn params i_ind (add_emp_info e (Some "args")))
-     (Ffix_ctrs' (S i) kn params i_ind b' t)
+      (it_kptProd_default (Some "no_uniform_params") e (no_uniform_params)
+        (fun e => auxctr i a kn params i_ind (add_emp_info e (Some "args"))) )
+      (Ffix_ctrs' no_uniform_params (S i) kn params i_ind b' t)
   end.
 
-Fixpoint Ffix_bodies_1 i_ind bodies kn t : infolocal ->  term :=
+Fixpoint Ffix_bodies_1 no_uniform_params i_ind bodies kn t : infolocal ->  term :=
   match bodies with
   | [] => t
   | body :: bodies' => fun e =>
     let the_inductive := {| inductive_mind := kn; inductive_ind := i_ind |} in
     let indices := ind_indices body in
     mktProd (Savelist "P") e prop_name
-      (it_mktProd_default (Some "indices") e (indices) $
-        fun e'' => tProd the_name
+      ( e <- it_kptProd_default (Some "no_uniform_params") e (no_uniform_params);;
+        e <- it_mktProd_default (Some "indices") e (indices);;
+        tProd the_name
           (tApp (tInd the_inductive [])
-            (rels_of "params" e'' ++ rels_of "indices" e''))
+            (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e))
           (tSort sProp)
-      ) (Ffix_bodies_1 (S i_ind) bodies' kn t) end.
+      ) (Ffix_bodies_1 no_uniform_params (S i_ind) bodies' kn t) end.
 
-Fixpoint Ffix_bodies_2 i_ind bodies kn params t : infolocal -> term :=
+Fixpoint Ffix_bodies_2 no_uniform_params i_ind bodies kn params t : infolocal -> term :=
   match bodies with
   | [] => t
   | b :: bodies' =>
-    Ffix_ctrs' 0 kn params i_ind (ind_ctors b) (
-      Ffix_bodies_2 (S i_ind) bodies' kn params t
+    Ffix_ctrs' no_uniform_params 0 kn params i_ind (ind_ctors b) (
+      Ffix_bodies_2 no_uniform_params (S i_ind) bodies' kn params t
     ) end.
-
 
 (*
   This function generates the term of each type constructor of each inductive body
 *)
-Definition Ffix_bodies_2' bodies kn params t :=
-  Ffix_bodies_2 0 bodies kn params t.
+Definition Ffix_bodies_2' no_uniform_params bodies kn params t :=
+  Ffix_bodies_2 no_uniform_params 0 bodies kn params t.
 
 
 (*
@@ -165,27 +165,31 @@ Definition Ffix_bodies_2' bodies kn params t :=
     ...
     forall (Pn : ... -> Tn _ -> Prop),
 *)
-Definition Ffix_bodies_1' bodies kn t e :=
-  Ffix_bodies_1 0 bodies kn t (add_emp_info e (Some "P")).
+Definition Ffix_bodies_1' no_uniform_params bodies kn t e :=
+  Ffix_bodies_1 no_uniform_params 0 bodies kn t (add_emp_info e (Some "P")).
 
 
 Definition GenerateIndp (kn : kername) (ty : mutual_inductive_body) : term :=
   let params := ty.(ind_params) in
   let initial_info :=  make_initial_info kn ty in
+  let (params, no_uniform_params) := SeperateParams kn ty in
+
   let body_main := hd todo ty.(ind_bodies) in
   let the_inductive_main := {| inductive_mind := kn; inductive_ind := 0 |} in
   let indices_main := body_main.(ind_indices) in
 
+
   it_kptProd_default (Some "params") initial_info params
-    (Ffix_bodies_1' ty.(ind_bodies) kn
-      ( e <- Ffix_bodies_2' ty.(ind_bodies) kn params;;
+    (Ffix_bodies_1' no_uniform_params ty.(ind_bodies) kn
+      ( e <- Ffix_bodies_2' no_uniform_params ty.(ind_bodies) kn params;;
+        e <- it_kptProd_default (Some "no_uniform_params") e (no_uniform_params);;
         e <- it_mktProd_default (Some "indices") e (indices_main);;
         e <- mktProd (Saveitem "x") e the_name
               (tApp (tInd the_inductive_main [])
-                  (rels_of "params" e ++ rels_of "indices" e)
-                );;
-        (tApp (rel_of "P" e) (rels_of "indices" e ++ [rel_of "x" e]))
-    ))
+                  (rels_of "params" e ++ rels_of "no_uniform_params" e ++ rels_of "indices" e));;
+        tApp (geti_info "P" e 0)
+          (rels_of "no_uniform_params" e ++ rels_of "indices" e ++ [rel_of "x" e])
+      ))
   .
 
 
