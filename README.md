@@ -40,7 +40,12 @@ At the main root of the project, use:
   + induction_principle_proof : deriving the induction principle (proof term) of any inductive type
 
   use case for the extended framework with scope guarantees:
-  + induction_principle_closed : deriving the induction principle (just type, no proof term) of any inductive type
+  + induction_principle_closed : deriving the induction principle (just type, no proof term) of any inductive type (guarantees that the output is well-scoped)
+
+  WellScopedProof:
+  + defining a deriver similar to the one in examples/induction_principle
+  + proving (a posteriori) that the deriver gives well-scoped output
+  + (One can compare this method with the method used in examples/induction_principle_closed)
 
 ## Test
 
