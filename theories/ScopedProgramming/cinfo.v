@@ -45,8 +45,7 @@ Section index_manage.
       fun x => mkdecl x.(decl_name) x.(decl_body) (lift_tRel x.(decl_type))
     ) l.
 
-  Definition lookup_list (e : infolocal) (na : string) : list (BasicAst.context_decl nat) :=
-    let l := e.(info) in
+  Definition lookup_list l (na : string) : list (BasicAst.context_decl nat) :=
     match find (fun i => match i with
                         | (na', _) => String.eqb na na'
                 end) l  with
@@ -225,15 +224,16 @@ Proof.
   simpl in H3. eapply Compare_dec.leb_complete in H3.  lia.
 Qed.
 
-Record cinfo (n k nind:nat) (l:list (string * nat)) :Type := mkcinfo {
+Record cinfo (n k:nat) (l ls:list (string * nat)) :Type := mkcinfo {
   ei: infolocal;
   ci : closed_info_n n ei;
   ck : k <= #|ei.(renaming)|;
-  Pl : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| >= y.2) ei.(info) l;
+  Pl : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| = y.2) ei.(info) l;
+  Pls : Forall2 (fun x y => x.1 = y.1 /\ #|x.2| = y.2) ei.(info_source) ls;
 }.
 
-Arguments mkcinfo {n k nind l}.
-Arguments ei {n k nind l}.
+Arguments mkcinfo {n k l ls}.
+Arguments ei {n k l ls}.
 
 
 (* Inductive saveinfo:=
@@ -275,11 +275,11 @@ Qed.
 Lemma lemy01 {l l'}:
   Forall2
   (fun (x : string × list (BasicAst.context_decl nat))
-    (y : string × nat) => x.1 = y.1 /\ #|x.2| >= y.2) l
+    (y : string × nat) => x.1 = y.1 /\ #|x.2| = y.2) l
   l' ->
   Forall2
   (fun (x : string × list (BasicAst.context_decl nat))
-     (y : string × nat) => x.1 = y.1 /\ #|x.2| >= y.2)
+     (y : string × nat) => x.1 = y.1 /\ #|x.2| = y.2)
   (map
      (fun x : string × list (BasicAst.context_decl nat) =>
       (x.1, plus_one_index x.2)) l) l'.
@@ -294,11 +294,11 @@ Qed.
 
 Lemma lemx01 {info l s na} :
   Forall2
-    (fun x y => x.1 = y.1 /\ #|x.2| >= y.2)
+    (fun x y => x.1 = y.1 /\ #|x.2| = y.2)
     info l
   ->
   Forall2
-    (fun x y => x.1 = y.1 /\ #|x.2| >= y.2)
+    (fun x y => x.1 = y.1 /\ #|x.2| = y.2)
     (replace_add_info
       (map
           (fun x => (x.1, plus_one_index x.2)) info) s
@@ -327,8 +327,8 @@ Proof.
 Qed.
 
 
-Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) (saveinfo:option string):
-  cinfo (S n) (S k) nind (replace_info_len saveinfo l) :=
+Program Definition update_kp {n} {k} {l ls} (na:aname) (e:cinfo n k l ls) (saveinfo:option string):
+  cinfo (S n) (S k) (replace_info_len saveinfo l) ls :=
   let e := ei e in
   let item := mkdecl na None 0 in
   let item_mapt := mkdecl na None (tRel 0) in
@@ -352,8 +352,8 @@ Program Definition update_kp {n} {k} {nind} {l} (na:aname) (e:cinfo n k nind l) 
     | Some str => mkinfo renaming (replace_add_info info str item) info_source e.(kn)
     end
   in
-  @mkcinfo (S n) (S k) _ (replace_info_len saveinfo l)
-    e _ _ _.
+  @mkcinfo (S n) (S k) (replace_info_len saveinfo l) ls
+    e _ _ _ _.
 Obligation 1.
   destruct e0. destruct ei0. destruct ci0. simpl in f, f0.
   destruct saveinfo.
@@ -378,9 +378,15 @@ Next Obligation.
   - simpl. eapply lemx01. auto.
   - simpl. eapply lemy01. auto.
 Qed.
+Next Obligation.
+  destruct e0. destruct ei0. simpl. simpl in Pl0.
+  destruct saveinfo.
+  - simpl. eapply lemy01. auto.
+  - simpl. eapply lemy01. auto.
+Qed.
 
-Program Definition update_mk {n k nind:nat} {l} (na:aname) (e0:cinfo n k nind l)
-  (saveinfo:option string) : cinfo (S n) k nind (replace_info_len saveinfo l):=
+Program Definition update_mk {n k l ls} (na:aname) (e0:cinfo n k l ls)
+  (saveinfo:option string) : cinfo (S n) k (replace_info_len saveinfo l) ls:=
   let e := ei e0 in
   let info :=
     map (
@@ -396,8 +402,8 @@ Program Definition update_mk {n k nind:nat} {l} (na:aname) (e0:cinfo n k nind l)
     | None => mkinfo renaming info e.(info_source) e.(kn)
     | Some str => mkinfo renaming (replace_add_info info str item) e.(info_source) e.(kn)    end
   in
-  @mkcinfo (S n) k nind (replace_info_len saveinfo l)
-    e _ _ _ .
+  @mkcinfo (S n) k (replace_info_len saveinfo l) ls
+    e _ _ _ _.
 Obligation 1.
   destruct saveinfo.
   - destruct e0.
@@ -423,6 +429,11 @@ Next Obligation.
   - simpl. eapply lemx01. auto.
   - simpl. eapply lemy01. auto.
 Qed.
+Next Obligation.
+  destruct e0. destruct ei0. simpl. simpl in Pl0.
+  destruct saveinfo. auto. auto.
+Qed.
+
 
 (* Lemma lem_lookup_item {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
   lookup_item (ei e) str < n.
@@ -454,7 +465,7 @@ Obligation 1.
 Defined. *)
 
 
-Program Definition geti_rename {n m nind:nat} {l} (e:cinfo n m nind l) (i:nat) (h:i<m) :cterm n :=
+Program Definition geti_rename {n m l ls} (e:cinfo n m l ls) (i:nat) (h:i<m) :cterm n :=
   let e' := ei e in
   let l := map decl_type e'.(renaming) in
   existc (nth i l (tRel 1000)).
@@ -481,12 +492,12 @@ Definition within_info l (str:string) (i:nat) :=
 Definition has_info (l:list (string*nat)) str i :=
   match
     (find (fun x => String.eqb str x.1) l) with
-  | Some (_, k) => i <= k
+  | Some (_, k) => i = k
   | None => False
   end.
 
-Lemma lem8989 {n k nind l} (e:cinfo n k nind l) (str:string) (i:nat):
-  within_info l str i -> i < #|lookup_list (ei e) str|.
+Lemma lem8989 {n k l ls} (e:cinfo n k l ls) (str:string) (i:nat):
+  within_info l str i -> i < #|lookup_list (info (ei e)) str|.
 Proof.
   intro.
   destruct e. simpl. unfold within_info in H.
@@ -504,15 +515,15 @@ Proof.
 Qed.
 
 
-Program Definition geti_info {n k nind l} (na:string) (e:cinfo n k nind l) (i:nat)
+Program Definition geti_info {n k l ls} (na:string) (e:cinfo n k l ls) (i:nat)
   (h:within_info l na i) :cterm n :=
-  let l := rev (lookup_list (ei e) na) in
+  let l := rev (lookup_list (info (ei e)) na) in
   match nth_error l i with
   | Some x => existc (tRel (decl_type x))
   | None => exist _ (tRel 1000) _ end.
 Next Obligation.
   assert (nth_error
-          (rev (lookup_list (ei e) na))
+          (rev (lookup_list (info (ei e)) na))
           i = Some x). auto.
   eapply nth_error_In in H.
   unfold lookup_list in H. destruct e. destruct ei0. simpl in H.
@@ -553,15 +564,15 @@ Next Obligation.
 Qed.
 (* Next Obligation. *)
 
-Program Definition get_info_last {n k nind l} (na:string) (e:cinfo n k nind l)
+Program Definition get_info_last {n k l ls} (na:string) (e:cinfo n k l ls)
   (h:within_info l na 0) :cterm n :=
-  let l := (lookup_list (ei e) na) in
+  let l := (lookup_list (info (ei e)) na) in
   match nth_error l 0 with
   | Some x => existc (tRel (decl_type x))
   | None => existc (tRel 1000) end.
 Next Obligation.
   assert (nth_error
-          ( (lookup_list (ei e) na))
+          ( (lookup_list (info (ei e)) na))
           0 = Some x). auto.
   eapply nth_error_In in H.
   unfold lookup_list in H. destruct e. destruct ei0. simpl in H.
@@ -595,7 +606,7 @@ Next Obligation.
 Qed.
 Next Obligation.
   assert (nth_error
-  ( (lookup_list (ei e) na))
+  ( (lookup_list (info (ei e)) na))
     0 = None). auto.
   (* symmetry in H. *)
   (* unfold lookup_list in Heq_anonymous. *)
@@ -608,12 +619,12 @@ Qed.
 
 
 
-Program Definition rel_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l)
+Program Definition rel_of {n k l ls} (na:string) (e:cinfo n k l ls)
   (h:within_info l na 0) : cterm n :=
   geti_info na e 0 h.
 
-Lemma lem_lookup_list {n k nind:nat} {l} (e:cinfo n k nind l) (str:string):
-  Forall (fun x => Nat.ltb  (decl_type x) n) ((lookup_list (ei e) str)).
+Lemma lem_lookup_list {n k l ls} (e:cinfo n k l ls) (str:string):
+  Forall (fun x => Nat.ltb  (decl_type x) n) ((lookup_list (info (ei e)) str)).
 Proof.
   destruct e. destruct ei0.
   simpl.
@@ -642,8 +653,8 @@ Proof.
   - auto.
 Qed.
 
-Program Definition rels_of {n k nind:nat} {l} (na:string) (e:cinfo n k nind l): list (cterm n):=
-  rev (map_In (lookup_list (ei e) na)
+Program Definition rels_of {n k l ls} (na:string) (e:cinfo n k l ls): list (cterm n):=
+  rev (map_In (lookup_list (info (ei e)) na)
     (fun x xinl => exist _ (tRel (decl_type x)) _)).
 Next Obligation.
   pose (h0 := lem_lookup_list e na).
@@ -718,6 +729,18 @@ Proof.
               String.eqb str1 x.1) l) eqn:eq0.
   + rewrite <- H2. destruct p. lia.
   + auto.
+Qed.
+
+Lemma lem_has_info_within2 {str ls nind n}:
+has_info ls str nind ->
+within_info ls str n ->
+n < nind.
+Proof.
+unfold has_info.
+unfold within_info.
+destruct (find (fun x => String.eqb str x.1) ls).
++ destruct p. lia.
++ auto.
 Qed.
 
 Lemma lem_app_closed {t tl n} : closedn n (tApp t tl) -> forall t', In t' tl -> closedn n t'.

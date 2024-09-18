@@ -7,38 +7,75 @@ Import Lia.
 Axiom todo : forall {A}, A.
 
 
-Definition kpcProd {n k nind:nat} {l} (saveinfo:option string) na (e:cinfo n k nind l)
-  (t1:cterm n) (t2 : cinfo (S n) (S k) nind (replace_info_len saveinfo l)-> cterm (S n)): cterm n:=
+Definition kpcProd {n k l ls} (saveinfo:option string) na (e:cinfo n k l ls)
+  (t1:cterm n) (t2 : cinfo (S n) (S k) (replace_info_len saveinfo l) ls-> cterm (S n)): cterm n:=
   let e' := update_kp na e saveinfo in
   cProd na (t1) (t2 e').
 
-Definition mkcProd {n k nind:nat} {l} (saveinfo:option string) na (e:cinfo n k nind l)
-  (t1:cterm n) (t2:cinfo (S n) k nind (replace_info_len saveinfo l) -> cterm (S n)) : cterm n:=
+Definition mkcProd {n k l ls} (saveinfo:option string) na (e:cinfo n k l ls)
+  (t1:cterm n) (t2:cinfo (S n) k (replace_info_len saveinfo l) ls -> cterm (S n)) : cterm n:=
   let e' := update_mk na e saveinfo in
   cProd na t1 (t2 e').
 
 
-Program Definition is_rec_call {n m nind l} (e:cinfo n m nind l) i :
-  option ({i:nat | i < nind}) :=
+Fixpoint Ffix_findi (l:list nat) (j:nat) (i:nat) :=
+  match l with
+  | k :: l0 => if eqb k i then Some j else Ffix_findi l0 (j+1) i
+  | [] => None
+  end.
+
+Lemma lemma_Ffix_findi l j i q:
+  Ffix_findi l j i = Some q -> q < #|l| + j.
+Proof.
+  revert j i q.
+  induction l.
+  + simpl. intros. inversion H.
+  + intros. simpl.
+    simpl in H.
+    destruct (eqb a i).
+    ++ inversion H. simpl. lia.
+    ++ specialize (IHl _ _ _ H). lia.
+Qed.
+(* Definition is_rec_call (e:infolocal) i : 
+  option nat:=
+  let l := rev_map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
+  Ffix_findi l 0 i. *)
+
+Program Definition is_rec_call {n m l ls} (e:cinfo n m l ls) i :
+  option ({i:nat | within_info ls "rels_of_T" i}) :=
   let e := ei e in
-  let nrenaming := #|e.(renaming)| in
-  (* let nind := e.(nind) in *)
-  match Nat.ltb i nrenaming with
-  | false => None
-  | true => match Nat.leb (nrenaming - nind) i with
-             | false => None
-             | true => Some (existc (nrenaming - i - 1)) end end.
+  let l := rev_map (fun x => x.(decl_type)) (lookup_list e.(info_source) "rels_of_T") in
+  match Ffix_findi l 0 i with
+  | None => None
+  | Some k => Some (existc k) end.
 Next Obligation.
-  destruct e0. destruct ei. simpl. simpl in Heq_anonymous, Heq_anonymous0.
-  apply eq_sym in Heq_anonymous.
-  eapply Compare_dec.leb_complete in  Heq_anonymous.
-  apply eq_sym in Heq_anonymous0.
-  eapply Compare_dec.leb_complete in  Heq_anonymous0.
-  lia.
+  symmetry in Heq_anonymous.
+  eapply lemma_Ffix_findi in Heq_anonymous.
+  rewrite rev_map_length in Heq_anonymous.
+  destruct e0. destruct ei. simpl in Heq_anonymous.
+  clear ci ck Pl.
+  simpl in Pls.
+  induction Pls.
+  + simpl in Heq_anonymous. inversion Heq_anonymous.
+  + unfold within_info. unfold find.
+    unfold lookup_list in Heq_anonymous.
+    unfold find in Heq_anonymous.
+    destruct (String.eqb "rels_of_T" y.1) eqn:eq0.
+    - destruct x, y. simpl in H. destruct H.
+      eapply lemstr in eq0. simpl in eq0.
+      rewrite eq0 in Heq_anonymous.
+      rewrite H in Heq_anonymous.
+      assert (String.eqb t0 t0 = true). eapply lemstr. auto.
+      rewrite H1 in Heq_anonymous.
+      rewrite H0 in Heq_anonymous. lia.
+    - destruct x, y. simpl in H. destruct H.
+      rewrite <- H in eq0.
+      unfold ".1" in eq0. rewrite eq0 in Heq_anonymous.
+      eapply IHPls. auto.
 Qed.
 
 
-Program Fixpoint it_update_kp {n k nind l} names (e:cinfo n k nind l): (cinfo (#|names| + n ) (#|names| + k) _ _) :=
+Program Fixpoint it_update_kp {n k l ls} names (e:cinfo n k l ls): (cinfo (#|names| + n ) (#|names| + k) _ _) :=
   match names with
   | [ ] => e
   | na :: names => it_update_kp names (update_kp na e None) end.
@@ -51,7 +88,7 @@ Program Fixpoint it_update_kp_defs {n k nind l} (defs:list (def term)) (e:cinfo 
 
 Unset Guard Checking.
 
-Program Fixpoint Ffix_mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:term) (h:closedn m t)
+Program Fixpoint Ffix_mapt {n m l ls} (e:cinfo n m l ls) (t:term) (h:closedn m t)
   {struct t}: cterm n :=
   match t with
   | tRel k =>  geti_rename e k _
@@ -199,7 +236,7 @@ Qed.
 
 Set Guard Checking.
 
-Definition mapt {n m nind:nat} {l} (e:cinfo n m nind l) (t:cterm m) : cterm n:=
+Definition mapt {n m l ls} (e:cinfo n m l ls) (t:cterm m) : cterm n:=
   Ffix_mapt e (proj1_sig t) (proj2_sig t).
 
 
@@ -222,22 +259,22 @@ Definition add_emp_info e saveinfo :=
     mkinfo e.(renaming) ((str, []) :: e.(info)) e.(info_source) e.(kn)
   | _ => e end.
 
-Program Fixpoint Ffix_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
-  (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: cinfo (n + m) (k+m) nind (addl l saveinfo m) -> cterm (n + m) ) {struct ctx}
+Program Fixpoint Ffix_kpcProd {n k m l ls} (saveinfo:option string)
+  (ctx:context_closed k m) (e:cinfo n k l ls)
+  (t: cinfo (n + m) (k+m) (addl l saveinfo m) ls -> cterm (n + m) ) {struct ctx}
   : cterm n :=
   (
     match ctx as ctx0 in context_closed _ m2
     return forall (a:m = m2), ((cast ctx m2 a) = ctx0) -> cterm n with
     | nnil => fun eq1 eq2 =>
-        cterm_lift _ $ t (mkcinfo (add_emp_info (ei e) saveinfo) _ _ _)
+        cterm_lift _ $ t (mkcinfo (add_emp_info (ei e) saveinfo) _ _ _ _)
     | ncons _ a ctx' =>
       fun eq1 eq2 =>
         Ffix_kpcProd saveinfo ctx' e
           (fun e' =>
             kpcProd saveinfo a.(decl_name) e'
               (mapt e' (a.(decl_type)))
-              (fun e'' => cterm_lift _ (t (mkcinfo (ei e'') _ _ _) )))
+              (fun e'' => cterm_lift _ (t (mkcinfo (ei e'') _ _ _ _) )))
     end
   )  eq_refl eq_refl.
 Next Obligation. lia. Qed.
@@ -254,6 +291,7 @@ Next Obligation. destruct e. simpl. unfold addl.
   - simpl. constructor. auto. auto.
   - auto.
 Qed.
+Next Obligation. destruct e. destruct ei. unfold add_emp_info. simpl. destruct saveinfo. auto. auto. Qed.
 Next Obligation. lia. Qed.
 Next Obligation. destruct e''. simpl. assert (S (n + n0) = n + S n0). lia. rewrite <- H. auto. Qed.
 Next Obligation. destruct e''. simpl. lia. Qed.
@@ -263,12 +301,12 @@ Next Obligation.
     simpl. auto.
   + auto.
 Qed.
+Next Obligation. destruct e''. destruct ei. unfold add_emp_info. simpl. destruct saveinfo. auto. auto. Qed.
 (* Next Obligation. *)
 
-
-Program Definition it_kpcProd {n k m nind:nat} {l} (saveinfo:option string)
-  (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: forall (e:cinfo (n + m) (k + m) nind (addl l saveinfo m)) ,
+Program Definition it_kpcProd {n k m l ls} (saveinfo:option string)
+  (ctx:context_closed k m) (e:cinfo n k l ls)
+  (t: forall (e:cinfo (n + m) (k + m) (addl l saveinfo m) ls) ,
     cterm (n + m))
   : cterm n :=
 
@@ -442,7 +480,7 @@ Forall2
    (y : string × nat)
  =>
  x.1 = y.1 /\
- #|x.2| >= y.2) info
+ #|x.2| = y.2) info
 (addl' l
    saveinfo n0)
 ->
@@ -453,7 +491,7 @@ Forall2
               (BasicAst.context_decl
                  nat))
      (y : string × nat) =>
-   x.1 = y.1 /\ #|x.2| >= y.2)
+   x.1 = y.1 /\ #|x.2| = y.2)
   (replace_add_info
      (map
         (fun
@@ -478,41 +516,43 @@ Proof.
     rewrite H3. assert (String.eqb saveinfo saveinfo = true). apply lemstr. auto.
     rewrite H7. constructor.
     simpl. split. auto. rewrite plus_one_index_length. auto.
-    simpl. inversion H. lia. eapply lemy01. auto.
+    simpl. inversion H. eapply lemy01. auto.
 Qed.
 
-Program Fixpoint Ffix_mkcProd' {n k nind m:nat} {l} (saveinfo:string)
+Program Fixpoint Ffix_mkcProd' {n k l ls} {m} (saveinfo:string)
   (ctx:context_closed k m)
-  (e:cinfo n k nind (addl' l saveinfo 0))
-  (e0:cinfo n k nind (addl' l saveinfo 0))
-  (t: cinfo (n + m) (k + m) nind (addl' l saveinfo m) ->
-      cinfo (n + m) k nind (addl' l saveinfo m) -> cterm (n + m))
+  (e:cinfo n k (addl' l saveinfo 0) ls)
+  (e0:cinfo n k (addl' l saveinfo 0) ls)
+  (t: cinfo (n + m) (k + m) (addl' l saveinfo m) ls ->
+      cinfo (n + m) k (addl' l saveinfo m) ls -> cterm (n + m))
   {struct ctx}: cterm n :=
   (match ctx as ctx0 in context_closed _ m2
     return forall (a:m=m2), (cast ctx m2 a = ctx0) -> cterm n with
   | nnil => fun eq1 eq2 => cterm_lift _ $
-    t (mkcinfo (ei e) _ _ _ )
-      (mkcinfo (ei e0) _ _ _ )
+    t (mkcinfo (ei e) _ _ _ _ )
+      (mkcinfo (ei e0) _ _ _ _ )
   | ncons _ a ctx' => fun eq1 eq2 =>
     Ffix_mkcProd' saveinfo ctx' e e0
       (fun ea eb =>
-      (* let ea' := update_kp a.(decl_name) ea saveinfo in *)
-      (* let eb' := update_mk a.(decl_name) eb saveinfo in *)
         cProd a.(decl_name)
           (mapt ea a.(decl_type))
           (cterm_lift _  $
             t
-              (mkcinfo (ei (update_kp a.(decl_name) ea (Some saveinfo))) _ _ _)
-              (mkcinfo (ei (update_mk a.(decl_name) eb (Some saveinfo))) _ _ _)
+              (mkcinfo (ei (update_kp a.(decl_name) ea (Some saveinfo))) _ _ _ _)
+              (mkcinfo (ei (update_mk a.(decl_name) eb (Some saveinfo))) _ _ _ _)
           ))
   end) eq_refl eq_refl.
 Next Obligation. lia. Qed.
 Next Obligation. destruct e. simpl. assert (n = n + 0). lia. rewrite <- H. auto. Qed.
 Next Obligation. destruct e. simpl. lia. Qed.
 Next Obligation. destruct e. simpl. auto. Qed.
+Next Obligation. destruct e. simpl. auto. Qed.
+
 Next Obligation. destruct e0. simpl. assert (n = n + 0). lia. rewrite <- H. auto. Qed.
 Next Obligation. destruct e0. simpl. lia. Qed.
 Next Obligation. destruct e0. simpl. auto. Qed.
+Next Obligation. destruct e0. simpl. auto. Qed.
+
 Next Obligation. lia. Qed.
 Next Obligation.
   simpl. destruct ea. simpl. split.
@@ -527,6 +567,8 @@ Next Obligation.
   destruct ea. simpl. destruct ei. simpl. simpl in Pl. eapply mylem999. auto.
 Qed.
 Next Obligation.
+  destruct ea. simpl. destruct ei. simpl. auto. eapply lemy01. auto. Qed.
+Next Obligation.
   simpl. destruct eb. simpl. split.
   + simpl. destruct ei, ci. eapply lemx02. 2: exact H. lia.
   + simpl. destruct ei, ci. simpl. simpl in H0. eapply lemx03. 2: exact H0. lia.
@@ -537,13 +579,17 @@ Qed.
 Next Obligation.
   destruct eb. simpl. destruct ei. simpl. simpl in Pl. eapply mylem999. auto.
 Qed.
+Next Obligation.
+destruct eb. simpl. destruct ei. simpl. auto. Qed.
+(* Next Obligation. *)
 
-Program Definition add_emp_info' {n k nind l} (infon:cinfo n k nind l) s
-  : cinfo n k nind (addl' l s 0) :=
+
+Program Definition add_emp_info' {n k l ls} (infon:cinfo n k l ls) s
+  : cinfo n k (addl' l s 0) ls:=
   let e := ei infon in
   mkcinfo
     (mkinfo e.(renaming) ((s, []) :: e.(info)) e.(info_source) e.(kn))
-    _ _ _
+    _ _ _ _
     .
 Next Obligation.
   destruct infon. simpl. split.
@@ -556,11 +602,12 @@ Qed.
 Next Obligation.
   simpl. constructor. auto. destruct infon. auto.
 Qed.
+Next Obligation. destruct infon. auto. Qed.
 
 
-Program Definition it_mkcProd {n k nind m:nat} {l} (saveinfo:string)
-  (ctx:context_closed k m) (e:cinfo n k nind l)
-  (t: cinfo (n + m) (k + m) nind (addl' l saveinfo m)-> cterm (n + m)) : cterm n:=
+Program Definition it_mkcProd {n k l ls} {m} (saveinfo:string)
+  (ctx:context_closed k m) (e:cinfo n k l ls)
+  (t: cinfo (n + m) (k + m) (addl' l saveinfo m) ls -> cterm (n + m)) : cterm n:=
   Ffix_mkcProd' saveinfo ctx
     (add_emp_info' e saveinfo)
     (add_emp_info' e saveinfo) (fun a _ => t a).
@@ -605,9 +652,9 @@ Program Definition make_initial_cinfo' (kn:kername)
 Program Definition make_initial_cinfo (kn:kername)
   (ty:mutual_inductive_body_closed)
   (h:wf_ind_closed ty)
-  :cinfo 0 ty.(nind') ty.(nind') []
+  :cinfo 0 ty.(nind') [] [("rels_of_T", ty.(nind'))]
   :=
-  mkcinfo (make_initial_cinfo' kn ty) _ _ _.
+  mkcinfo (make_initial_cinfo' kn ty) _ _ _ _.
 Next Obligation.
   unfold closed_info_n. firstorder. simpl.
   apply Forall_map.
@@ -620,4 +667,8 @@ Qed.
 Next Obligation.
   rewrite mapi_length. destruct h. lia.
 Qed.
-(* Next Obligation. *)
+Next Obligation.
+  constructor. 2:auto.
+  simpl. split. auto.
+  rewrite mapi_length. destruct h. auto.
+Qed.
